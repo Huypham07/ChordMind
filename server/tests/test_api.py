@@ -1,18 +1,21 @@
 # server/tests/test_api.py
 import pytest
 from fastapi.testclient import TestClient
-from sqlalchemy import create_engine, text
+from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
+from sqlalchemy.pool import StaticPool
 from app.main import app
 from app.infrastructure.db import Base, get_session
 from app.infrastructure import orm  # noqa: F401  registers SongRow
 from app.infrastructure import youtube
 
-_DB_URL = "postgresql+psycopg://chordmind:chordmind@localhost:5432/chordmind"
-
 def _client(monkeypatch):
-    engine = create_engine(_DB_URL, future=True)
-    Base.metadata.drop_all(engine)
+    engine = create_engine(
+        "sqlite://",
+        connect_args={"check_same_thread": False},
+        poolclass=StaticPool,
+        future=True,
+    )
     Base.metadata.create_all(engine)
     Session = sessionmaker(engine, future=True)
 
