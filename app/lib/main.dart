@@ -1,17 +1,19 @@
+// app/lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme.dart';
+import 'core/router.dart';
 
 void main() => runApp(const ProviderScope(child: ChordMindApp()));
 
 class ChordMindApp extends StatelessWidget {
   const ChordMindApp({super.key});
   @override
-  Widget build(BuildContext context) => MaterialApp(
+  Widget build(BuildContext context) => MaterialApp.router(
         title: 'ChordMind',
         theme: chordMindLight,
         darkTheme: chordMindDark,
         themeMode: ThemeMode.system,
-        home: const Scaffold(body: Center(child: Text('ChordMind'))),
+        routerConfig: router,
       );
 }
