@@ -26,7 +26,7 @@ def _client(monkeypatch):
         finally:
             s.close()
 
-    app.dependency_overrides[get_session] = _override
+    monkeypatch.setitem(app.dependency_overrides, get_session, _override)
     monkeypatch.setattr(youtube, "fetch_meta", lambda vid: ("Demo Song", 120.0))
     return TestClient(app)
 
@@ -43,4 +43,3 @@ def test_submit_and_fetch(monkeypatch):
     assert g.status_code == 200
     assert g.json()["key"] == "C major"
     assert c.get("/songs/missing0000").status_code == 404
-    app.dependency_overrides.clear()
