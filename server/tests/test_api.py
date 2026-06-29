@@ -39,6 +39,19 @@ def test_bad_url_returns_400(monkeypatch):
     r = c.post("/songs", json={"url": "not a youtube link"})
     assert r.status_code == 400
 
+def test_cors_preflight_allowed(monkeypatch):
+    # Flutter web sends an OPTIONS preflight before POST; it must not 405.
+    c = _client(monkeypatch)
+    r = c.options(
+        "/songs",
+        headers={
+            "Origin": "http://localhost:1234",
+            "Access-Control-Request-Method": "POST",
+        },
+    )
+    assert r.status_code == 200
+    assert r.headers["access-control-allow-origin"] == "*"
+
 def test_submit_and_fetch(monkeypatch):
     c = _client(monkeypatch)
     r = c.post("/songs", json={"url": "https://youtu.be/abcdefghijk"})
