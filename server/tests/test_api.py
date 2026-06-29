@@ -1,0 +1,43 @@
+# server/tests/test_api.py
+import pytest
+from fastapi.testclient import TestClient
+from sqlalchemy import create_engine, text
+from sqlalchemy.orm import sessionmaker
+from app.main import app
+from app.infrastructure.db import Base, get_session
+from app.infrastructure import orm  # noqa: F401  registers SongRow
+from app.infrastructure import youtube
+
+_DB_URL = "postgresql+psycopg://chordmind:chordmind@localhost:5432/chordmind"
+
+def _client(monkeypatch):
+    engine = create_engine(_DB_URL, future=True)
+    Base.metadata.drop_all(engine)
+    Base.metadata.create_all(engine)
+    Session = sessionmaker(engine, future=True)
+
+    def _override():
+        s = Session()
+        try:
+            yield s
+        finally:
+            s.close()
+
+    app.dependency_overrides[get_session] = _override
+    monkeypatch.setattr(youtube, "fetch_meta", lambda vid: ("Demo Song", 120.0))
+    return TestClient(app)
+
+def test_parse_video_id():
+    assert youtube.parse_video_id("https://www.youtube.com/watch?v=abcdefghijk") == "abcdefghijk"
+    assert youtube.parse_video_id("https://youtu.be/abcdefghijk") == "abcdefghijk"
+
+def test_submit_and_fetch(monkeypatch):
+    c = _client(monkeypatch)
+    r = c.post("/songs", json={"url": "https://youtu.be/abcdefghijk"})
+    assert r.status_code == 200
+    assert r.json()["source"]["youtubeId"] == "abcdefghijk"
+    g = c.get("/songs/abcdefghijk")
+    assert g.status_code == 200
+    assert g.json()["key"] == "C major"
+    assert c.get("/songs/missing0000").status_code == 404
+    app.dependency_overrides.clear()
