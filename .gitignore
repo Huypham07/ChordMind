@@ -3,8 +3,8 @@ __pycache__/
 *.pyc
 .venv/
 venv/
-app/mobile/build/
-app/mobile/.dart_tool/
+app/build/
+app/.dart_tool/
 .dart_tool/
 pgdata/
 *.egg-info/

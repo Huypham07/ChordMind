@@ -770,23 +770,23 @@ git add server/ && git commit -m "feat(server): API layer (DTO, DI, routes) wire
 ### Task 7: Flutter scaffold + theme (design system)
 
 **Files:**
-- Create: `app/mobile/pubspec.yaml`
-- Create: `app/mobile/lib/core/theme.dart`
-- Create: `app/mobile/lib/main.dart`
-- Test: `app/mobile/test/theme_test.dart`
+- Create: `app/pubspec.yaml`
+- Create: `app/lib/core/theme.dart`
+- Create: `app/lib/main.dart`
+- Test: `app/test/theme_test.dart`
 
 **Interfaces:**
 - Produces: `chordMindLight` and `chordMindDark` `ThemeData`; a `ChordMindColors` extension with semantic tokens `chordActive`, `beatMarker`, `surfaceAlt`. `main.dart` runs `MaterialApp` with `themeMode: system`.
 
 - [ ] **Step 1: Create the Flutter project shell**
 
-Run: `cd app/mobile && flutter create . --platforms=android,ios,web --org com.chordmind`
+Run: `cd app && flutter create . --platforms=android,ios,web --org com.chordmind`
 Then add to `pubspec.yaml` dependencies: `flutter_riverpod: ^2.5.0`, `dio: ^5.4.0`, `youtube_player_iframe: ^5.1.0`, `go_router: ^14.0.0`.
 
 - [ ] **Step 2: Write the failing test**
 
 ```dart
-// app/mobile/test/theme_test.dart
+// app/test/theme_test.dart
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chordmind/core/theme.dart';
 
@@ -802,13 +802,13 @@ void main() {
 
 - [ ] **Step 3: Run test to verify it fails**
 
-Run: `cd app/mobile && flutter test test/theme_test.dart`
+Run: `cd app && flutter test test/theme_test.dart`
 Expected: FAIL (theme.dart not found)
 
 - [ ] **Step 4: Write the theme + main**
 
 ```dart
-// app/mobile/lib/core/theme.dart
+// app/lib/core/theme.dart
 import 'package:flutter/material.dart';
 
 @immutable
@@ -855,7 +855,7 @@ final chordMindDark = _build(Brightness.dark);
 ```
 
 ```dart
-// app/mobile/lib/main.dart
+// app/lib/main.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme.dart';
@@ -877,13 +877,13 @@ class ChordMindApp extends StatelessWidget {
 
 - [ ] **Step 5: Run test + web build to verify**
 
-Run: `cd app/mobile && flutter test test/theme_test.dart && flutter build web`
+Run: `cd app && flutter test test/theme_test.dart && flutter build web`
 Expected: test PASS; web build succeeds.
 
 - [ ] **Step 6: Commit**
 
 ```bash
-git add app/mobile && git commit -m "feat(app): flutter scaffold + ChordMind theme"
+git add app && git commit -m "feat(app): flutter scaffold + ChordMind theme"
 ```
 
 ---
@@ -891,8 +891,8 @@ git add app/mobile && git commit -m "feat(app): flutter scaffold + ChordMind the
 ### Task 8: Dart AnalysisResult models
 
 **Files:**
-- Create: `app/mobile/lib/core/models.dart`
-- Test: `app/mobile/test/models_test.dart`
+- Create: `app/lib/core/models.dart`
+- Test: `app/test/models_test.dart`
 
 **Interfaces:**
 - Produces: classes `AnalysisResult`, `Source`, `Beat`, `Chord`, `SyncChord`, `Segment`, each with `fromJson(Map)`. Field names **exactly** mirror Task 2's wire contract (`songId`, `synchronizedChords`, `beatIndex`, `timeSignature`, …).
@@ -901,7 +901,7 @@ git add app/mobile && git commit -m "feat(app): flutter scaffold + ChordMind the
 - [ ] **Step 1: Write the failing test**
 
 ```dart
-// app/mobile/test/models_test.dart
+// app/test/models_test.dart
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chordmind/core/models.dart';
 
@@ -928,13 +928,13 @@ void main() {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd app/mobile && flutter test test/models_test.dart`
+Run: `cd app && flutter test test/models_test.dart`
 Expected: FAIL (models.dart not found)
 
 - [ ] **Step 3: Write the models**
 
 ```dart
-// app/mobile/lib/core/models.dart
+// app/lib/core/models.dart
 class Source {
   final String youtubeId, title;
   final double duration, bpm;
@@ -998,13 +998,13 @@ class AnalysisResult {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd app/mobile && flutter test test/models_test.dart`
+Run: `cd app && flutter test test/models_test.dart`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/mobile && git commit -m "feat(app): AnalysisResult dart models"
+git add app && git commit -m "feat(app): AnalysisResult dart models"
 ```
 
 ---
@@ -1012,9 +1012,9 @@ git add app/mobile && git commit -m "feat(app): AnalysisResult dart models"
 ### Task 9: API client + repository (data layer)
 
 **Files:**
-- Create: `app/mobile/lib/core/api.dart`
-- Create: `app/mobile/lib/core/song_repository.dart`
-- Test: `app/mobile/test/api_test.dart`
+- Create: `app/lib/core/api.dart`
+- Create: `app/lib/core/song_repository.dart`
+- Test: `app/test/api_test.dart`
 
 **Interfaces:**
 - Produces: `ChordMindApi(Dio dio, {String baseUrl})` with `Future<AnalysisResult> submit(String url)` (POST /songs), `Future<AnalysisResult> get(String youtubeId)` (GET /songs/{id}), `Future<List<({String youtubeId, String title})>> recent()`. A Riverpod `apiProvider`.
@@ -1024,7 +1024,7 @@ git add app/mobile && git commit -m "feat(app): AnalysisResult dart models"
 - [ ] **Step 1: Write the failing test** (Dio with a mock adapter)
 
 ```dart
-// app/mobile/test/api_test.dart
+// app/test/api_test.dart
 import 'package:dio/dio.dart';
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chordmind/core/api.dart';
@@ -1052,13 +1052,13 @@ void main() {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd app/mobile && flutter test test/api_test.dart`
+Run: `cd app && flutter test test/api_test.dart`
 Expected: FAIL (api.dart not found)
 
 - [ ] **Step 3: Write the client**
 
 ```dart
-// app/mobile/lib/core/api.dart
+// app/lib/core/api.dart
 import 'package:dio/dio.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'models.dart';
@@ -1088,7 +1088,7 @@ final apiProvider = Provider((_) => ChordMindApi(Dio()));
 ```
 
 ```dart
-// app/mobile/lib/core/song_repository.dart
+// app/lib/core/song_repository.dart
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'api.dart';
 import 'models.dart';
@@ -1117,13 +1117,13 @@ final songRepositoryProvider =
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd app/mobile && flutter test test/api_test.dart`
+Run: `cd app && flutter test test/api_test.dart`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/mobile && git commit -m "feat(app): API client + SongRepository (data layer)"
+git add app && git commit -m "feat(app): API client + SongRepository (data layer)"
 ```
 
 ---
@@ -1131,9 +1131,9 @@ git add app/mobile && git commit -m "feat(app): API client + SongRepository (dat
 ### Task 10: Chord grid sync logic + widget
 
 **Files:**
-- Create: `app/mobile/lib/features/chord_grid/grid_sync.dart`
-- Create: `app/mobile/lib/features/chord_grid/chord_grid.dart`
-- Test: `app/mobile/test/grid_sync_test.dart`
+- Create: `app/lib/features/chord_grid/grid_sync.dart`
+- Create: `app/lib/features/chord_grid/chord_grid.dart`
+- Test: `app/test/grid_sync_test.dart`
 
 **Interfaces:**
 - Produces: `int activeChordIndex(AnalysisResult r, double positionSeconds)` — returns the index into `synchronizedChords` whose chord is sounding at `positionSeconds` (via the `chords[]` start/end ranges), or -1 before the first chord. `ChordGrid` widget takes `AnalysisResult` + `positionSeconds` and highlights the active cell using `ChordMindColors.chordActive`.
@@ -1142,7 +1142,7 @@ git add app/mobile && git commit -m "feat(app): API client + SongRepository (dat
 - [ ] **Step 1: Write the failing test**
 
 ```dart
-// app/mobile/test/grid_sync_test.dart
+// app/test/grid_sync_test.dart
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chordmind/core/models.dart';
 import 'package:chordmind/features/chord_grid/grid_sync.dart';
@@ -1174,13 +1174,13 @@ void main() {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd app/mobile && flutter test test/grid_sync_test.dart`
+Run: `cd app && flutter test test/grid_sync_test.dart`
 Expected: FAIL (grid_sync.dart not found)
 
 - [ ] **Step 3: Write sync logic + grid widget**
 
 ```dart
-// app/mobile/lib/features/chord_grid/grid_sync.dart
+// app/lib/features/chord_grid/grid_sync.dart
 import 'package:chordmind/core/models.dart';
 
 int activeChordIndex(AnalysisResult r, double pos) {
@@ -1192,7 +1192,7 @@ int activeChordIndex(AnalysisResult r, double pos) {
 ```
 
 ```dart
-// app/mobile/lib/features/chord_grid/chord_grid.dart
+// app/lib/features/chord_grid/chord_grid.dart
 import 'package:flutter/material.dart';
 import 'package:chordmind/core/models.dart';
 import 'package:chordmind/core/theme.dart';
@@ -1236,13 +1236,13 @@ class ChordGrid extends StatelessWidget {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd app/mobile && flutter test test/grid_sync_test.dart`
+Run: `cd app && flutter test test/grid_sync_test.dart`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/mobile && git commit -m "feat(app): chord grid + sync logic"
+git add app && git commit -m "feat(app): chord grid + sync logic"
 ```
 
 ---
@@ -1250,11 +1250,11 @@ git add app/mobile && git commit -m "feat(app): chord grid + sync logic"
 ### Task 11: Chord diagrams (guitar + piano)
 
 **Files:**
-- Create: `app/mobile/lib/features/diagrams/voicings.dart`
-- Create: `app/mobile/lib/features/diagrams/guitar_diagram.dart`
-- Create: `app/mobile/lib/features/diagrams/piano_diagram.dart`
-- Create: `app/mobile/lib/features/diagrams/chord_diagram_sheet.dart`
-- Test: `app/mobile/test/voicings_test.dart`
+- Create: `app/lib/features/diagrams/voicings.dart`
+- Create: `app/lib/features/diagrams/guitar_diagram.dart`
+- Create: `app/lib/features/diagrams/piano_diagram.dart`
+- Create: `app/lib/features/diagrams/chord_diagram_sheet.dart`
+- Test: `app/test/voicings_test.dart`
 
 **Interfaces:**
 - Produces:
@@ -1266,7 +1266,7 @@ git add app/mobile && git commit -m "feat(app): chord grid + sync logic"
 - [ ] **Step 1: Write the failing test**
 
 ```dart
-// app/mobile/test/voicings_test.dart
+// app/test/voicings_test.dart
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chordmind/features/diagrams/voicings.dart';
 
@@ -1284,13 +1284,13 @@ void main() {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd app/mobile && flutter test test/voicings_test.dart`
+Run: `cd app && flutter test test/voicings_test.dart`
 Expected: FAIL (voicings.dart not found)
 
 - [ ] **Step 3: Write voicings + diagram widgets**
 
 ```dart
-// app/mobile/lib/features/diagrams/voicings.dart
+// app/lib/features/diagrams/voicings.dart
 class GuitarVoicing {
   final List<int> frets; // 6 strings low->high, -1 muted, 0 open
   final int baseFret;
@@ -1323,7 +1323,7 @@ List<int> pianoNotes(String chord) {
 ```
 
 ```dart
-// app/mobile/lib/features/diagrams/guitar_diagram.dart
+// app/lib/features/diagrams/guitar_diagram.dart
 import 'package:flutter/material.dart';
 import 'voicings.dart';
 
@@ -1366,7 +1366,7 @@ class _GuitarPainter extends CustomPainter {
 ```
 
 ```dart
-// app/mobile/lib/features/diagrams/piano_diagram.dart
+// app/lib/features/diagrams/piano_diagram.dart
 import 'package:flutter/material.dart';
 import 'package:chordmind/core/theme.dart';
 
@@ -1397,7 +1397,7 @@ class PianoDiagram extends StatelessWidget {
 ```
 
 ```dart
-// app/mobile/lib/features/diagrams/chord_diagram_sheet.dart
+// app/lib/features/diagrams/chord_diagram_sheet.dart
 import 'package:flutter/material.dart';
 import 'voicings.dart';
 import 'guitar_diagram.dart';
@@ -1422,13 +1422,13 @@ void showChordDiagram(BuildContext context, String chord) {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd app/mobile && flutter test test/voicings_test.dart`
+Run: `cd app && flutter test test/voicings_test.dart`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/mobile && git commit -m "feat(app): guitar + piano chord diagrams"
+git add app && git commit -m "feat(app): guitar + piano chord diagrams"
 ```
 
 ---
@@ -1436,11 +1436,11 @@ git add app/mobile && git commit -m "feat(app): guitar + piano chord diagrams"
 ### Task 12: Player screen + routing + placeholder tabs
 
 **Files:**
-- Create: `app/mobile/lib/features/player/player_screen.dart`
-- Create: `app/mobile/lib/features/home/home_screen.dart`
-- Create: `app/mobile/lib/core/router.dart`
-- Modify: `app/mobile/lib/main.dart`
-- Test: `app/mobile/test/home_test.dart`
+- Create: `app/lib/features/player/player_screen.dart`
+- Create: `app/lib/features/home/home_screen.dart`
+- Create: `app/lib/core/router.dart`
+- Modify: `app/lib/main.dart`
+- Test: `app/test/home_test.dart`
 
 **Interfaces:**
 - Produces:
@@ -1452,7 +1452,7 @@ git add app/mobile && git commit -m "feat(app): guitar + piano chord diagrams"
 - [ ] **Step 1: Write the failing test** (widget test for HomeScreen renders input + button)
 
 ```dart
-// app/mobile/test/home_test.dart
+// app/test/home_test.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:flutter_test/flutter_test.dart';
@@ -1470,13 +1470,13 @@ void main() {
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd app/mobile && flutter test test/home_test.dart`
+Run: `cd app && flutter test test/home_test.dart`
 Expected: FAIL (home_screen.dart not found)
 
 - [ ] **Step 3: Write home, player, router, wire main**
 
 ```dart
-// app/mobile/lib/features/home/home_screen.dart
+// app/lib/features/home/home_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
@@ -1522,7 +1522,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 ```
 
 ```dart
-// app/mobile/lib/features/player/player_screen.dart
+// app/lib/features/player/player_screen.dart
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
@@ -1597,7 +1597,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 ```
 
 ```dart
-// app/mobile/lib/core/router.dart
+// app/lib/core/router.dart
 import 'package:go_router/go_router.dart';
 import 'package:chordmind/features/home/home_screen.dart';
 import 'package:chordmind/features/player/player_screen.dart';
@@ -1609,7 +1609,7 @@ final router = GoRouter(routes: [
 ```
 
 ```dart
-// app/mobile/lib/main.dart  (replace body)
+// app/lib/main.dart  (replace body)
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme.dart';
@@ -1632,13 +1632,13 @@ class ChordMindApp extends StatelessWidget {
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd app/mobile && flutter test test/home_test.dart`
+Run: `cd app && flutter test test/home_test.dart`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/mobile && git commit -m "feat(app): home + player screens, routing, placeholder tabs"
+git add app && git commit -m "feat(app): home + player screens, routing, placeholder tabs"
 ```
 
 ---
@@ -1663,12 +1663,12 @@ Expected: JSON beginning with `{"songId":"dQw4w9WgXcQ"...` and a `synchronizedCh
 
 - [ ] **Step 3: Run the full test suites**
 
-Run: `cd server && python -m pytest -q && cd ../app/mobile && flutter test`
+Run: `cd server && python -m pytest -q && cd ../app && flutter test`
 Expected: all tests PASS.
 
 - [ ] **Step 4: Run the app on web and click through**
 
-Run: `cd app/mobile && flutter run -d chrome` (point api baseUrl at `http://localhost:8000`)
+Run: `cd app && flutter run -d chrome` (point api baseUrl at `http://localhost:8000`)
 Expected: paste a YouTube URL → Analyze → player screen with chord grid; tapping a chord cell opens the guitar+piano diagram sheet; toggling OS dark mode flips the theme.
 
 - [ ] **Step 5: Record results + commit**
