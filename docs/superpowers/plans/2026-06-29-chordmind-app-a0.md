@@ -4,14 +4,15 @@
 
 **Goal:** A running, demoable ChordMind vertical: paste a YouTube link → server returns a (stubbed) `AnalysisResult` → Flutter app shows a synced chord grid, guitar/piano diagrams, lyrics, and a fresh light/dark theme.
 
-**Architecture:** FastAPI + Postgres server with an `ml_interface` ModelSlot contract whose slots are **stubs returning fixtures**; an `ml_worker` runs slots on submit and caches the result. Flutter app (mobile-first, web as the dev/test surface) consumes the frozen `AnalysisResult` JSON contract via a REST client.
+**Architecture:** Clean Architecture. Server layers `domain` (framework-free entities + ports) → `application` (use cases on ports) → `infrastructure` (SQLAlchemy repo, stub ModelSlot, yt-dlp) → `api` (FastAPI + DTOs); dependencies point inward only. Model slots are **stubs returning fixtures**. Flutter app (mobile-first, web as the dev/test surface) consumes the frozen `AnalysisResult` JSON contract through a repository over a REST client.
 
 **Tech Stack:** Python 3.12, FastAPI, SQLAlchemy 2.x, Pydantic v2, Postgres 16 (Docker), pytest. Flutter 3.x (Dart 3), Riverpod, dio, youtube_player_iframe, flutter_test.
 
 ## Global Constraints
 
 - Audio input source: **YouTube link only** for A0.
-- `AnalysisResult` JSON shape is **frozen** (Task 2 / Task 9) — server and app must match field-for-field. No app code reads model internals.
+- `AnalysisResult` JSON shape is **frozen** — defined by the server domain entity (Task 2), mirrored by the Dart models (Task 8); server and app must match field-for-field. No app/UI code reads model internals.
+- **Clean Architecture:** dependencies point inward (api → application → domain; infrastructure → domain). `domain` imports no framework. Use cases depend on ports (`ModelSlot`, `SongRepository`), never on concrete SQLAlchemy/FastAPI types. Apply pragmatically — only ports that earn their keep; no one-impl interfaces beyond those two.
 - All model work is **stub**: slots return hand-authored fixtures; never call a real model.
 - Mobile-first layout; Flutter **web** must build and run (it is the verification surface).
 - DB: **Postgres** via `docker-compose` for local dev.
@@ -123,22 +124,27 @@ git add server/ && git commit -m "feat(server): scaffold FastAPI + postgres comp
 
 ---
 
-### Task 2: AnalysisResult contract (Pydantic)
+### Task 2: Domain layer — entities + ports
+
+**Layer:** `domain/` (innermost; framework-free, no FastAPI/SQLAlchemy/Pydantic imports).
 
 **Files:**
-- Create: `server/app/schemas.py`
-- Test: `server/tests/test_schemas.py`
+- Create: `server/app/domain/__init__.py`
+- Create: `server/app/domain/entities.py`
+- Create: `server/app/domain/ports.py`
+- Test: `server/tests/test_domain.py`
 
 **Interfaces:**
-- Produces: Pydantic models `Source`, `Beat`, `Chord`, `SyncChord`, `Segment`, `AnalysisResult`. Field names exactly: `AnalysisResult(songId, source, key, beats, downbeats, chords, synchronizedChords, segments, melody)`. These names are the frozen wire contract Task 9 (Dart) must mirror.
+- Produces: dataclasses `Source`, `Beat`, `Chord`, `SyncChord`, `Segment`, `AnalysisResult` with `to_dict()` and `from_dict(d)`. Field names are the **frozen wire contract** the Dart models (Task 8) mirror: `AnalysisResult(songId, source, key, beats, downbeats, chords, synchronizedChords, segments, melody)`, `Source(youtubeId, title, duration, bpm, timeSignature)`, `SyncChord(chord, beatIndex)`.
+- Produces ports (ABCs): `ModelSlot.run(youtube_id, title, duration) -> AnalysisResult`; `SongRepository.get(youtube_id) -> AnalysisResult | None`, `.save(result) -> None`, `.recent(limit=20) -> list[tuple[str, str]]`.
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
-# server/tests/test_schemas.py
-from app.schemas import AnalysisResult
+# server/tests/test_domain.py
+from app.domain.entities import AnalysisResult
 
-def test_analysis_result_roundtrip():
+def test_analysis_result_dict_roundtrip():
     data = {
         "songId": "s1",
         "source": {"youtubeId": "abc", "title": "T", "duration": 100.0, "bpm": 120.0, "timeSignature": 4},
@@ -150,117 +156,184 @@ def test_analysis_result_roundtrip():
         "segments": [{"label": "intro", "start": 0.0, "end": 8.0}],
         "melody": None,
     }
-    r = AnalysisResult.model_validate(data)
+    r = AnalysisResult.from_dict(data)
     assert r.synchronizedChords[0].chord == "C"
-    assert r.model_dump(by_alias=True)["songId"] == "s1"
+    assert r.source.youtubeId == "abc"
+    assert r.to_dict() == data  # serialization preserves the wire contract exactly
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd server && python -m pytest tests/test_schemas.py -v`
-Expected: FAIL (cannot import AnalysisResult)
+Run: `cd server && .venv/bin/python -m pytest tests/test_domain.py -v`
+Expected: FAIL (cannot import app.domain.entities)
 
-- [ ] **Step 3: Write the schemas**
+- [ ] **Step 3: Write entities + ports**
 
 ```python
-# server/app/schemas.py
-from pydantic import BaseModel, ConfigDict
+# server/app/domain/__init__.py
+```
 
-class _Base(BaseModel):
-    model_config = ConfigDict(populate_by_name=True)
+```python
+# server/app/domain/entities.py
+from __future__ import annotations
+from dataclasses import dataclass, field, asdict
 
-class Source(_Base):
+@dataclass
+class Source:
     youtubeId: str
     title: str
     duration: float
     bpm: float
     timeSignature: int
 
-class Beat(_Base):
+@dataclass
+class Beat:
     time: float
     beatNum: int
 
-class Chord(_Base):
+@dataclass
+class Chord:
     chord: str
     start: float
     end: float
     confidence: float
 
-class SyncChord(_Base):
+@dataclass
+class SyncChord:
     chord: str
     beatIndex: int
 
-class Segment(_Base):
+@dataclass
+class Segment:
     label: str
     start: float
     end: float
 
-class AnalysisResult(_Base):
+@dataclass
+class AnalysisResult:
     songId: str
     source: Source
     key: str
-    beats: list[Beat] = []
-    downbeats: list[float] = []
-    chords: list[Chord] = []
-    synchronizedChords: list[SyncChord] = []
-    segments: list[Segment] = []
+    beats: list[Beat] = field(default_factory=list)
+    downbeats: list[float] = field(default_factory=list)
+    chords: list[Chord] = field(default_factory=list)
+    synchronizedChords: list[SyncChord] = field(default_factory=list)
+    segments: list[Segment] = field(default_factory=list)
     melody: dict | None = None
+
+    def to_dict(self) -> dict:
+        return asdict(self)
+
+    @classmethod
+    def from_dict(cls, d: dict) -> "AnalysisResult":
+        return cls(
+            songId=d["songId"],
+            source=Source(**d["source"]),
+            key=d["key"],
+            beats=[Beat(**b) for b in d.get("beats", [])],
+            downbeats=list(d.get("downbeats", [])),
+            chords=[Chord(**c) for c in d.get("chords", [])],
+            synchronizedChords=[SyncChord(**s) for s in d.get("synchronizedChords", [])],
+            segments=[Segment(**s) for s in d.get("segments", [])],
+            melody=d.get("melody"),
+        )
+```
+
+```python
+# server/app/domain/ports.py
+from abc import ABC, abstractmethod
+from app.domain.entities import AnalysisResult
+
+class ModelSlot(ABC):
+    """Port for an analysis model. A0 has one stub impl; A1 adds real slots."""
+    @abstractmethod
+    def run(self, youtube_id: str, title: str, duration: float) -> AnalysisResult: ...
+
+class SongRepository(ABC):
+    """Port for persistence. Implemented in infrastructure; faked in use-case tests."""
+    @abstractmethod
+    def get(self, youtube_id: str) -> AnalysisResult | None: ...
+    @abstractmethod
+    def save(self, result: AnalysisResult) -> None: ...
+    @abstractmethod
+    def recent(self, limit: int = 20) -> list[tuple[str, str]]: ...
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd server && python -m pytest tests/test_schemas.py -v`
+Run: `cd server && .venv/bin/python -m pytest tests/test_domain.py -v`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add server/ && git commit -m "feat(server): freeze AnalysisResult contract"
+git add server/ && git commit -m "feat(server): domain entities + ports (clean arch core)"
 ```
 
 ---
 
-### Task 3: DB models + session
+### Task 3: Infrastructure — persistence (db + ORM + repository)
+
+**Layer:** `infrastructure/` (implements the `SongRepository` port using SQLAlchemy/Postgres).
 
 **Files:**
-- Create: `server/app/db.py`
-- Create: `server/app/models.py`
-- Test: `server/tests/test_models.py`
+- Create: `server/app/infrastructure/__init__.py`
+- Create: `server/app/infrastructure/db.py`
+- Create: `server/app/infrastructure/orm.py`
+- Create: `server/app/infrastructure/repository.py`
+- Test: `server/tests/test_repository.py`
 
 **Interfaces:**
-- Produces: `Base`, `get_session()` (yields a SQLAlchemy `Session`), `init_db()` (creates tables). ORM models `Song(id, youtube_id, title, analysis_json, created_at)`. (Tables `versions`/`votes`/`users` are deferred to A3 — do NOT create them here.)
-- Consumes: `get_settings().database_url` (Task 1).
+- Consumes: `AnalysisResult` (Task 2), `SongRepository` port (Task 2), `get_settings()` (Task 1).
+- Produces: `Base`, `get_session()` (FastAPI dependency yielding a `Session`), `init_db()`. ORM `SongRow(id, youtube_id, title, analysis_json, created_at)`. `SqlSongRepository(session)` implementing the `SongRepository` port; stores `result.to_dict()` as JSON, keyed by `result.source.youtubeId`.
+- (Tables `versions`/`votes`/`users` are deferred to A3 — do NOT create them.)
 
-- [ ] **Step 1: Write the failing test** (uses an in-memory SQLite override for speed)
+- [ ] **Step 1: Write the failing test** (in-memory SQLite)
 
 ```python
-# server/tests/test_models.py
+# server/tests/test_repository.py
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
-from app.db import Base
-from app.models import Song
+from app.infrastructure.db import Base
+from app.infrastructure import orm  # noqa: F401  registers SongRow on Base
+from app.infrastructure.repository import SqlSongRepository
+from app.domain.entities import AnalysisResult, Source
 
-def test_song_persist():
+def _repo():
     engine = create_engine("sqlite://")
     Base.metadata.create_all(engine)
-    Session = sessionmaker(engine)
-    with Session() as s:
-        s.add(Song(id="s1", youtube_id="abc", title="T", analysis_json={"k": 1}))
-        s.commit()
-        got = s.get(Song, "s1")
-        assert got.youtube_id == "abc"
-        assert got.analysis_json == {"k": 1}
+    return SqlSongRepository(sessionmaker(engine)())
+
+def _result():
+    return AnalysisResult(songId="abc", key="C major",
+        source=Source(youtubeId="abc", title="T", duration=100.0, bpm=120.0, timeSignature=4))
+
+def test_save_then_get_roundtrip():
+    repo = _repo()
+    assert repo.get("abc") is None
+    repo.save(_result())
+    got = repo.get("abc")
+    assert got is not None and got.source.youtubeId == "abc" and got.key == "C major"
+
+def test_recent_lists_saved():
+    repo = _repo()
+    repo.save(_result())
+    assert repo.recent() == [("abc", "T")]
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd server && python -m pytest tests/test_models.py -v`
-Expected: FAIL (cannot import app.db)
+Run: `cd server && .venv/bin/python -m pytest tests/test_repository.py -v`
+Expected: FAIL (cannot import app.infrastructure.db)
 
-- [ ] **Step 3: Write db + models**
+- [ ] **Step 3: Write db + orm + repository**
 
 ```python
-# server/app/db.py
+# server/app/infrastructure/__init__.py
+```
+
+```python
+# server/app/infrastructure/db.py
 from sqlalchemy import create_engine
 from sqlalchemy.orm import declarative_base, sessionmaker
 from app.config import get_settings
@@ -270,6 +343,7 @@ _engine = create_engine(get_settings().database_url, future=True)
 SessionLocal = sessionmaker(bind=_engine, future=True)
 
 def init_db():
+    from app.infrastructure import orm  # noqa: F401  ensure tables are registered
     Base.metadata.create_all(_engine)
 
 def get_session():
@@ -278,13 +352,13 @@ def get_session():
 ```
 
 ```python
-# server/app/models.py
+# server/app/infrastructure/orm.py
 from datetime import datetime
 from sqlalchemy import String, DateTime, JSON
 from sqlalchemy.orm import Mapped, mapped_column
-from app.db import Base
+from app.infrastructure.db import Base
 
-class Song(Base):
+class SongRow(Base):
     __tablename__ = "songs"
     id: Mapped[str] = mapped_column(String, primary_key=True)
     youtube_id: Mapped[str] = mapped_column(String, index=True)
@@ -293,206 +367,247 @@ class Song(Base):
     created_at: Mapped[datetime] = mapped_column(DateTime, default=datetime.utcnow)
 ```
 
+```python
+# server/app/infrastructure/repository.py
+from sqlalchemy.orm import Session
+from app.domain.entities import AnalysisResult
+from app.domain.ports import SongRepository
+from app.infrastructure.orm import SongRow
+
+class SqlSongRepository(SongRepository):
+    def __init__(self, session: Session):
+        self._s = session
+
+    def get(self, youtube_id: str) -> AnalysisResult | None:
+        row = self._s.get(SongRow, youtube_id)
+        return AnalysisResult.from_dict(row.analysis_json) if row else None
+
+    def save(self, result: AnalysisResult) -> None:
+        self._s.add(SongRow(
+            id=result.source.youtubeId,
+            youtube_id=result.source.youtubeId,
+            title=result.source.title,
+            analysis_json=result.to_dict(),
+        ))
+        self._s.commit()
+
+    def recent(self, limit: int = 20) -> list[tuple[str, str]]:
+        rows = self._s.query(SongRow).order_by(SongRow.created_at.desc()).limit(limit).all()
+        return [(r.youtube_id, r.title) for r in rows]
+```
+
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd server && python -m pytest tests/test_models.py -v`
-Expected: PASS
+Run: `cd server && .venv/bin/python -m pytest tests/test_repository.py -v`
+Expected: PASS (both tests)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add server/ && git commit -m "feat(server): Song ORM model + db session"
+git add server/ && git commit -m "feat(server): SQLAlchemy SongRepository (infrastructure)"
 ```
 
 ---
 
-### Task 4: ml_interface ModelSlot + StubSlot fixtures
+### Task 4: Infrastructure — stub ModelSlot + fixtures
+
+**Layer:** `infrastructure/` (implements the `ModelSlot` port with hand-authored fixtures — the A0 placeholder for real models).
 
 **Files:**
-- Create: `server/app/ml_interface/__init__.py`
-- Create: `server/app/ml_interface/slots.py`
-- Create: `server/app/ml_interface/fixtures.py`
+- Create: `server/app/infrastructure/fixtures.py`
+- Create: `server/app/infrastructure/slots.py`
 - Test: `server/tests/test_slots.py`
 
 **Interfaces:**
-- Produces: `ModelSlot` ABC with `def run(self, ctx: dict) -> dict`. `StubAnalysisSlot.run(ctx)` returns a dict that validates as `AnalysisResult` (Task 2), filling beats/chords/synchronizedChords/segments from a hand-authored fixture. `ctx` carries `{"youtubeId", "title", "duration"}`.
+- Consumes: `AnalysisResult` and friends (Task 2), `ModelSlot` port (Task 2).
+- Produces: `build_fixture(youtube_id, title, duration) -> AnalysisResult`; `StubAnalysisSlot` implementing `ModelSlot`. Fixture = I–V–vi–IV loop in C, 120 bpm, 2 beats/chord; every `SyncChord.beatIndex` references a real beat.
 
 - [ ] **Step 1: Write the failing test**
 
 ```python
 # server/tests/test_slots.py
-from app.ml_interface.slots import StubAnalysisSlot
-from app.schemas import AnalysisResult
+from app.infrastructure.slots import StubAnalysisSlot
 
 def test_stub_slot_returns_valid_analysis():
-    out = StubAnalysisSlot().run({"youtubeId": "abc", "title": "Demo", "duration": 120.0})
-    r = AnalysisResult.model_validate(out)
+    r = StubAnalysisSlot().run("abc", "Demo", 120.0)
     assert r.source.youtubeId == "abc"
     assert len(r.synchronizedChords) > 0
-    # beatIndex must reference a real beat
     assert max(c.beatIndex for c in r.synchronizedChords) < len(r.beats)
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd server && python -m pytest tests/test_slots.py -v`
+Run: `cd server && .venv/bin/python -m pytest tests/test_slots.py -v`
 Expected: FAIL (cannot import)
 
-- [ ] **Step 3: Write slots + fixtures**
+- [ ] **Step 3: Write fixtures + slot**
 
 ```python
-# server/app/ml_interface/__init__.py
-```
+# server/app/infrastructure/fixtures.py
+from app.domain.entities import AnalysisResult, Source, Beat, Chord, SyncChord, Segment
 
-```python
-# server/app/ml_interface/fixtures.py
-# A simple 8-beat I–V–vi–IV loop in C, 2 beats per chord, 120 bpm.
+# A simple 8+ beat I–V–vi–IV loop in C, 2 beats per chord, 120 bpm.
 PROGRESSION = ["C", "G", "Am", "F"]
 
-def build_fixture(youtube_id: str, title: str, duration: float) -> dict:
+def build_fixture(youtube_id: str, title: str, duration: float) -> AnalysisResult:
     bpm, beats_per_chord = 120.0, 2
     spb = 60.0 / bpm  # seconds per beat
     n_beats = max(8, int(duration / spb))
-    beats = [{"time": round(i * spb, 3), "beatNum": (i % 4) + 1} for i in range(n_beats)]
-    downbeats = [b["time"] for b in beats if b["beatNum"] == 1]
+    beats = [Beat(time=round(i * spb, 3), beatNum=(i % 4) + 1) for i in range(n_beats)]
+    downbeats = [b.time for b in beats if b.beatNum == 1]
     chords, sync = [], []
     for i in range(0, n_beats, beats_per_chord):
         name = PROGRESSION[(i // beats_per_chord) % len(PROGRESSION)]
-        start = beats[i]["time"]
-        end = beats[min(i + beats_per_chord, n_beats - 1)]["time"]
-        chords.append({"chord": name, "start": start, "end": end, "confidence": 0.95})
-        sync.append({"chord": name, "beatIndex": i})
-    return {
-        "songId": youtube_id,
-        "source": {"youtubeId": youtube_id, "title": title,
-                   "duration": duration, "bpm": bpm, "timeSignature": 4},
-        "key": "C major",
-        "beats": beats, "downbeats": downbeats,
-        "chords": chords, "synchronizedChords": sync,
-        "segments": [{"label": "verse", "start": 0.0, "end": duration}],
-        "melody": None,
-    }
+        start = beats[i].time
+        end = beats[min(i + beats_per_chord, n_beats - 1)].time
+        chords.append(Chord(chord=name, start=start, end=end, confidence=0.95))
+        sync.append(SyncChord(chord=name, beatIndex=i))
+    return AnalysisResult(
+        songId=youtube_id,
+        source=Source(youtubeId=youtube_id, title=title, duration=duration, bpm=bpm, timeSignature=4),
+        key="C major",
+        beats=beats, downbeats=downbeats, chords=chords, synchronizedChords=sync,
+        segments=[Segment(label="verse", start=0.0, end=duration)], melody=None,
+    )
 ```
 
 ```python
-# server/app/ml_interface/slots.py
-from abc import ABC, abstractmethod
-from app.ml_interface.fixtures import build_fixture
-
-class ModelSlot(ABC):
-    @abstractmethod
-    def run(self, ctx: dict) -> dict: ...
+# server/app/infrastructure/slots.py
+from app.domain.entities import AnalysisResult
+from app.domain.ports import ModelSlot
+from app.infrastructure.fixtures import build_fixture
 
 class StubAnalysisSlot(ModelSlot):
     """A0 placeholder. Replace with real beat/chord/key/segment slots in A1."""
-    def run(self, ctx: dict) -> dict:
-        return build_fixture(ctx["youtubeId"], ctx["title"], ctx["duration"])
+    def run(self, youtube_id: str, title: str, duration: float) -> AnalysisResult:
+        return build_fixture(youtube_id, title, duration)
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd server && python -m pytest tests/test_slots.py -v`
+Run: `cd server && .venv/bin/python -m pytest tests/test_slots.py -v`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add server/ && git commit -m "feat(server): ml_interface ModelSlot + stub fixture slot"
+git add server/ && git commit -m "feat(server): stub ModelSlot + fixtures (infrastructure)"
 ```
 
 ---
 
-### Task 5: ml_worker — analyze + cache
+### Task 5: Application — AnalyzeSong use case
+
+**Layer:** `application/` (orchestrates ports; no framework, no DB imports — depends only on `domain`).
 
 **Files:**
-- Create: `server/app/ml_worker.py`
-- Test: `server/tests/test_worker.py`
+- Create: `server/app/application/__init__.py`
+- Create: `server/app/application/analyze_song.py`
+- Test: `server/tests/test_analyze_song.py`
 
 **Interfaces:**
-- Produces: `analyze_song(session, youtube_id, title, duration) -> dict`. Returns cached `analysis_json` if a `Song` with that `youtube_id` exists; otherwise runs `StubAnalysisSlot`, persists a `Song`, returns the dict. Song `id` = `youtube_id` for A0.
-- Consumes: `StubAnalysisSlot` (Task 4), `Song` (Task 3).
+- Consumes: `SongRepository` + `ModelSlot` ports (Task 2), `StubAnalysisSlot` (Task 4, used only in the test).
+- Produces: `AnalyzeSong(repo: SongRepository, slot: ModelSlot)` with `execute(youtube_id, title, duration) -> AnalysisResult`: returns cached result if the repo has it; otherwise runs the slot, saves, returns. This is the replacement for the old `ml_worker.analyze_song`.
 
-- [ ] **Step 1: Write the failing test**
+- [ ] **Step 1: Write the failing test** (in-memory fake repo — no DB needed, the clean-arch payoff)
 
 ```python
-# server/tests/test_worker.py
-from sqlalchemy import create_engine
-from sqlalchemy.orm import sessionmaker
-from app.db import Base
-from app.models import Song
-from app.ml_worker import analyze_song
+# server/tests/test_analyze_song.py
+from app.application.analyze_song import AnalyzeSong
+from app.domain.ports import SongRepository
+from app.infrastructure.slots import StubAnalysisSlot
 
-def _session():
-    engine = create_engine("sqlite://")
-    Base.metadata.create_all(engine)
-    return sessionmaker(engine)()
+class FakeRepo(SongRepository):
+    def __init__(self):
+        self.store = {}
+        self.saves = 0
+    def get(self, yid):
+        return self.store.get(yid)
+    def save(self, r):
+        self.saves += 1
+        self.store[r.source.youtubeId] = r
+    def recent(self, limit=20):
+        return [(k, v.source.title) for k, v in self.store.items()]
 
-def test_analyze_creates_then_caches():
-    s = _session()
-    first = analyze_song(s, "abc", "Demo", 120.0)
-    assert first["source"]["youtubeId"] == "abc"
-    assert s.query(Song).count() == 1
-    # second call must hit cache, not create a duplicate
-    second = analyze_song(s, "abc", "Demo", 120.0)
-    assert second == first
-    assert s.query(Song).count() == 1
+def test_runs_then_caches():
+    repo = FakeRepo()
+    uc = AnalyzeSong(repo, StubAnalysisSlot())
+    first = uc.execute("abc", "Demo", 120.0)
+    assert first.source.youtubeId == "abc"
+    assert repo.saves == 1
+    second = uc.execute("abc", "Demo", 120.0)  # must hit cache, not save again
+    assert repo.saves == 1
+    assert second.songId == first.songId
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd server && python -m pytest tests/test_worker.py -v`
-Expected: FAIL (cannot import analyze_song)
+Run: `cd server && .venv/bin/python -m pytest tests/test_analyze_song.py -v`
+Expected: FAIL (cannot import AnalyzeSong)
 
-- [ ] **Step 3: Write the worker**
+- [ ] **Step 3: Write the use case**
 
 ```python
-# server/app/ml_worker.py
-from sqlalchemy.orm import Session
-from app.models import Song
-from app.ml_interface.slots import StubAnalysisSlot
+# server/app/application/__init__.py
+```
 
-# ponytail: in-process synchronous worker; swap to a job queue if pipeline gets slow.
-def analyze_song(session: Session, youtube_id: str, title: str, duration: float) -> dict:
-    existing = session.get(Song, youtube_id)
-    if existing:
-        return existing.analysis_json
-    analysis = StubAnalysisSlot().run(
-        {"youtubeId": youtube_id, "title": title, "duration": duration}
-    )
-    session.add(Song(id=youtube_id, youtube_id=youtube_id, title=title, analysis_json=analysis))
-    session.commit()
-    return analysis
+```python
+# server/app/application/analyze_song.py
+from app.domain.entities import AnalysisResult
+from app.domain.ports import ModelSlot, SongRepository
+
+# ponytail: synchronous use case; if the real pipeline gets slow, push execute() onto a job queue.
+class AnalyzeSong:
+    """Return cached analysis if present, else run the model slot and persist it."""
+    def __init__(self, repo: SongRepository, slot: ModelSlot):
+        self._repo = repo
+        self._slot = slot
+
+    def execute(self, youtube_id: str, title: str, duration: float) -> AnalysisResult:
+        cached = self._repo.get(youtube_id)
+        if cached:
+            return cached
+        result = self._slot.run(youtube_id, title, duration)
+        self._repo.save(result)
+        return result
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd server && python -m pytest tests/test_worker.py -v`
+Run: `cd server && .venv/bin/python -m pytest tests/test_analyze_song.py -v`
 Expected: PASS
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add server/ && git commit -m "feat(server): ml_worker analyze+cache"
+git add server/ && git commit -m "feat(server): AnalyzeSong use case (application)"
 ```
 
 ---
 
-### Task 6: API endpoints (submit + fetch)
+### Task 6: API layer — DTO, DI wiring, routes, YouTube helper
+
+**Layer:** `api/` (FastAPI adapters) + one infrastructure helper. Wires everything via dependency injection.
 
 **Files:**
-- Modify: `server/app/main.py`
-- Create: `server/app/youtube.py`
+- Create: `server/app/api/__init__.py`
+- Create: `server/app/api/schemas.py`
+- Create: `server/app/api/deps.py`
+- Create: `server/app/api/routes.py`
+- Create: `server/app/infrastructure/youtube.py`
+- Modify: `server/app/main.py` (replace Task 1 body: mount router + init_db on startup)
 - Test: `server/tests/test_api.py`
 
 **Interfaces:**
+- Consumes: `AnalyzeSong` (Task 5), `SqlSongRepository`, `get_session`, `init_db` (Task 3), `StubAnalysisSlot` (Task 4).
 - Produces:
-  - `POST /songs` body `{"url": "<youtube url>"}` → `AnalysisResult` JSON (runs worker, caches).
-  - `GET /songs/{youtube_id}` → cached `AnalysisResult` or 404.
-  - `GET /songs` → `[{youtubeId, title}]` recent list.
-  - `youtube.py`: `parse_video_id(url) -> str`, `fetch_meta(video_id) -> tuple[str, float]` (title, duration). For A0 `fetch_meta` may return stub metadata if yt-dlp unavailable.
-- Consumes: `analyze_song` (Task 5), `get_session` (Task 3), `init_db` (Task 3).
+  - `SubmitRequest(BaseModel)` with field `url: str` (input DTO).
+  - `deps.py`: `get_repo(session) -> SqlSongRepository`, `get_analyze_song(session) -> AnalyzeSong` (DI factories).
+  - `youtube.py`: `parse_video_id(url) -> str`, `fetch_meta(video_id) -> tuple[str, float]`.
+  - Routes: `GET /health` → `{"status":"ok"}`; `POST /songs {url}` → AnalysisResult JSON; `GET /songs/{youtube_id}` → AnalysisResult JSON or 404; `GET /songs` → `[{youtubeId, title}]`.
+- Note: the `/health` route now lives in `routes.py`; Task 1's `test_health.py` must still pass.
 
-- [ ] **Step 1: Write the failing test** (override DB dependency with SQLite)
+- [ ] **Step 1: Write the failing test**
 
 ```python
 # server/tests/test_api.py
@@ -500,8 +615,9 @@ from fastapi.testclient import TestClient
 from sqlalchemy import create_engine
 from sqlalchemy.orm import sessionmaker
 from app.main import app
-from app.db import Base, get_session
-from app import youtube
+from app.infrastructure.db import Base, get_session
+from app.infrastructure import orm  # noqa: F401  registers SongRow
+from app.infrastructure import youtube
 
 def _client(monkeypatch):
     engine = create_engine("sqlite://")
@@ -512,29 +628,45 @@ def _client(monkeypatch):
     return TestClient(app)
 
 def test_parse_video_id():
-    assert youtube.parse_video_id("https://www.youtube.com/watch?v=abc123") == "abc123"
-    assert youtube.parse_video_id("https://youtu.be/abc123") == "abc123"
+    assert youtube.parse_video_id("https://www.youtube.com/watch?v=abcdefghijk") == "abcdefghijk"
+    assert youtube.parse_video_id("https://youtu.be/abcdefghijk") == "abcdefghijk"
 
 def test_submit_and_fetch(monkeypatch):
     c = _client(monkeypatch)
-    r = c.post("/songs", json={"url": "https://youtu.be/abc123"})
+    r = c.post("/songs", json={"url": "https://youtu.be/abcdefghijk"})
     assert r.status_code == 200
-    assert r.json()["source"]["youtubeId"] == "abc123"
-    g = c.get("/songs/abc123")
+    assert r.json()["source"]["youtubeId"] == "abcdefghijk"
+    g = c.get("/songs/abcdefghijk")
     assert g.status_code == 200
     assert g.json()["key"] == "C major"
-    assert c.get("/songs/missing").status_code == 404
+    assert c.get("/songs/missing0000").status_code == 404
+    app.dependency_overrides.clear()
 ```
 
 - [ ] **Step 2: Run test to verify it fails**
 
-Run: `cd server && python -m pytest tests/test_api.py -v`
-Expected: FAIL (cannot import youtube / routes missing)
+Run: `cd server && .venv/bin/python -m pytest tests/test_api.py -v`
+Expected: FAIL (cannot import app.infrastructure.youtube / routes missing)
 
-- [ ] **Step 3: Write youtube helper + routes**
+- [ ] **Step 3: Write DTO, deps, youtube, routes, main**
 
 ```python
-# server/app/youtube.py
+# server/app/api/__init__.py
+```
+
+```python
+# server/app/api/schemas.py
+from pydantic import BaseModel
+
+class SubmitRequest(BaseModel):
+    url: str
+
+# ponytail: the domain AnalysisResult IS the response contract (returned via to_dict);
+# no duplicate Pydantic response model to keep in sync.
+```
+
+```python
+# server/app/infrastructure/youtube.py
 import re
 
 _PATTERNS = [r"v=([\w-]{11})", r"youtu\.be/([\w-]{11})", r"([\w-]{11})$"]
@@ -547,7 +679,7 @@ def parse_video_id(url: str) -> str:
     raise ValueError(f"cannot parse video id from {url!r}")
 
 def fetch_meta(video_id: str) -> tuple[str, float]:
-    # ponytail: real metadata via yt-dlp; falls back to stub if it fails (A0 uses stub analysis anyway).
+    # ponytail: real metadata via yt-dlp; falls back to stub if it fails (A0 analysis is stubbed anyway).
     try:
         import yt_dlp
         with yt_dlp.YoutubeDL({"quiet": True, "skip_download": True}) as ydl:
@@ -558,13 +690,60 @@ def fetch_meta(video_id: str) -> tuple[str, float]:
 ```
 
 ```python
-# server/app/main.py
-from fastapi import FastAPI, Depends, HTTPException
+# server/app/api/deps.py
+from fastapi import Depends
 from sqlalchemy.orm import Session
-from app.db import get_session, init_db
-from app.models import Song
-from app.ml_worker import analyze_song
-from app import youtube
+from app.infrastructure.db import get_session
+from app.infrastructure.repository import SqlSongRepository
+from app.infrastructure.slots import StubAnalysisSlot
+from app.application.analyze_song import AnalyzeSong
+
+def get_repo(session: Session = Depends(get_session)) -> SqlSongRepository:
+    return SqlSongRepository(session)
+
+def get_analyze_song(session: Session = Depends(get_session)) -> AnalyzeSong:
+    # A0 wires the stub slot here; swap StubAnalysisSlot for real slots in A1 without touching routes.
+    return AnalyzeSong(SqlSongRepository(session), StubAnalysisSlot())
+```
+
+```python
+# server/app/api/routes.py
+from fastapi import APIRouter, Depends, HTTPException
+from app.api.schemas import SubmitRequest
+from app.api.deps import get_repo, get_analyze_song
+from app.application.analyze_song import AnalyzeSong
+from app.infrastructure.repository import SqlSongRepository
+from app.infrastructure import youtube
+
+router = APIRouter()
+
+@router.get("/health")
+def health():
+    return {"status": "ok"}
+
+@router.post("/songs")
+def submit_song(body: SubmitRequest, uc: AnalyzeSong = Depends(get_analyze_song)):
+    vid = youtube.parse_video_id(body.url)
+    title, duration = youtube.fetch_meta(vid)
+    return uc.execute(vid, title, duration).to_dict()
+
+@router.get("/songs/{youtube_id}")
+def get_song(youtube_id: str, repo: SqlSongRepository = Depends(get_repo)):
+    result = repo.get(youtube_id)
+    if not result:
+        raise HTTPException(404, "not analyzed yet")
+    return result.to_dict()
+
+@router.get("/songs")
+def recent(repo: SqlSongRepository = Depends(get_repo)):
+    return [{"youtubeId": yid, "title": t} for yid, t in repo.recent()]
+```
+
+```python
+# server/app/main.py  (replace Task 1 body)
+from fastapi import FastAPI
+from app.infrastructure.db import init_db
+from app.api.routes import router
 
 app = FastAPI(title="ChordMind")
 
@@ -572,38 +751,18 @@ app = FastAPI(title="ChordMind")
 def _startup():
     init_db()
 
-@app.get("/health")
-def health():
-    return {"status": "ok"}
-
-@app.post("/songs")
-def submit_song(body: dict, session: Session = Depends(get_session)):
-    vid = youtube.parse_video_id(body["url"])
-    title, duration = youtube.fetch_meta(vid)
-    return analyze_song(session, vid, title, duration)
-
-@app.get("/songs/{youtube_id}")
-def get_song(youtube_id: str, session: Session = Depends(get_session)):
-    song = session.get(Song, youtube_id)
-    if not song:
-        raise HTTPException(404, "not analyzed yet")
-    return song.analysis_json
-
-@app.get("/songs")
-def recent(session: Session = Depends(get_session)):
-    rows = session.query(Song).order_by(Song.created_at.desc()).limit(20).all()
-    return [{"youtubeId": s.youtube_id, "title": s.title} for s in rows]
+app.include_router(router)
 ```
 
 - [ ] **Step 4: Run test to verify it passes**
 
-Run: `cd server && python -m pytest tests/test_api.py -v`
-Expected: PASS (all 3 tests)
+Run: `cd server && .venv/bin/python -m pytest tests/ -v`
+Expected: PASS (all tests, including Task 1's `test_health.py`)
 
 - [ ] **Step 5: Commit**
 
 ```bash
-git add server/ && git commit -m "feat(server): songs submit/fetch/recent endpoints"
+git add server/ && git commit -m "feat(server): API layer (DTO, DI, routes) wired to use case"
 ```
 
 ---
@@ -850,14 +1009,16 @@ git add app/mobile && git commit -m "feat(app): AnalysisResult dart models"
 
 ---
 
-### Task 9: API client
+### Task 9: API client + repository (data layer)
 
 **Files:**
 - Create: `app/mobile/lib/core/api.dart`
+- Create: `app/mobile/lib/core/song_repository.dart`
 - Test: `app/mobile/test/api_test.dart`
 
 **Interfaces:**
 - Produces: `ChordMindApi(Dio dio, {String baseUrl})` with `Future<AnalysisResult> submit(String url)` (POST /songs), `Future<AnalysisResult> get(String youtubeId)` (GET /songs/{id}), `Future<List<({String youtubeId, String title})>> recent()`. A Riverpod `apiProvider`.
+- Produces (clean-arch boundary the UI depends on): abstract `SongRepository` with the same three methods; `ApiSongRepository(ChordMindApi)` implements it; Riverpod `songRepositoryProvider`. **UI/features depend on `songRepositoryProvider`, never on `ChordMindApi`/Dio directly.**
 - Consumes: `AnalysisResult.fromJson` (Task 8).
 
 - [ ] **Step 1: Write the failing test** (Dio with a mock adapter)
@@ -926,6 +1087,34 @@ class ChordMindApi {
 final apiProvider = Provider((_) => ChordMindApi(Dio()));
 ```
 
+```dart
+// app/mobile/lib/core/song_repository.dart
+import 'package:flutter_riverpod/flutter_riverpod.dart';
+import 'api.dart';
+import 'models.dart';
+
+/// Clean-arch boundary: features depend on this, not on ChordMindApi/Dio.
+abstract class SongRepository {
+  Future<AnalysisResult> submit(String url);
+  Future<AnalysisResult> get(String youtubeId);
+  Future<List<({String youtubeId, String title})>> recent();
+}
+
+class ApiSongRepository implements SongRepository {
+  final ChordMindApi _api;
+  ApiSongRepository(this._api);
+  @override
+  Future<AnalysisResult> submit(String url) => _api.submit(url);
+  @override
+  Future<AnalysisResult> get(String youtubeId) => _api.get(youtubeId);
+  @override
+  Future<List<({String youtubeId, String title})>> recent() => _api.recent();
+}
+
+final songRepositoryProvider =
+    Provider<SongRepository>((ref) => ApiSongRepository(ref.read(apiProvider)));
+```
+
 - [ ] **Step 4: Run test to verify it passes**
 
 Run: `cd app/mobile && flutter test test/api_test.dart`
@@ -934,7 +1123,7 @@ Expected: PASS
 - [ ] **Step 5: Commit**
 
 ```bash
-git add app/mobile && git commit -m "feat(app): ChordMind API client"
+git add app/mobile && git commit -m "feat(app): API client + SongRepository (data layer)"
 ```
 
 ---
@@ -1258,7 +1447,7 @@ git add app/mobile && git commit -m "feat(app): guitar + piano chord diagrams"
   - `HomeScreen`: a `TextField` for a YouTube URL + "Analyze" button → calls `api.submit(url)` then routes to `/player/{youtubeId}`. Recent list below.
   - `PlayerScreen(youtubeId)`: loads analysis via `api.get`, shows the YouTube iframe player on top, `ChordGrid` below (driven by player position), and a bottom `TabBar` with tabs **Chords / Lyrics / Re-harm / Band / Versions** where the last three are placeholder `Center(Text('Coming soon'))`. Tapping a chord cell calls `showChordDiagram`.
   - `router` (go_router) with `/` and `/player/:id`.
-- Consumes: `apiProvider` (Task 9), `ChordGrid` (Task 10), `showChordDiagram` (Task 11).
+- Consumes: `songRepositoryProvider` (Task 9), `ChordGrid` (Task 10), `showChordDiagram` (Task 11).
 
 - [ ] **Step 1: Write the failing test** (widget test for HomeScreen renders input + button)
 
@@ -1291,7 +1480,7 @@ Expected: FAIL (home_screen.dart not found)
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:chordmind/core/api.dart';
+import 'package:chordmind/core/song_repository.dart';
 
 class HomeScreen extends ConsumerStatefulWidget {
   const HomeScreen({super.key});
@@ -1306,7 +1495,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   Future<void> _analyze() async {
     setState(() => _busy = true);
     try {
-      final r = await ref.read(apiProvider).submit(_ctrl.text);
+      final r = await ref.read(songRepositoryProvider).submit(_ctrl.text);
       if (mounted) context.go('/player/${r.source.youtubeId}');
     } finally {
       if (mounted) setState(() => _busy = false);
@@ -1337,7 +1526,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
-import 'package:chordmind/core/api.dart';
+import 'package:chordmind/core/song_repository.dart';
 import 'package:chordmind/core/models.dart';
 import 'package:chordmind/features/chord_grid/chord_grid.dart';
 import 'package:chordmind/features/diagrams/chord_diagram_sheet.dart';
@@ -1362,7 +1551,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     _yt.videoStateStream.listen((s) {
       if (mounted) setState(() => _pos = s.position.inMilliseconds / 1000.0);
     });
-    ref.read(apiProvider).get(widget.youtubeId).then((r) => mounted ? setState(() => _r = r) : null);
+    ref.read(songRepositoryProvider).get(widget.youtubeId).then((r) => mounted ? setState(() => _r = r) : null);
   }
 
   @override
@@ -1493,8 +1682,10 @@ git add docs/superpowers/plans/A0-VERIFY.md && git commit -m "docs: A0 verificat
 
 ## Self-Review
 
-**Spec coverage:** Section 1 phases → this plan is A0 (A1–A3 deferred, noted in header). Section 2 contract → Tasks 2 (server) + 8 (dart), names matched. Section 3 app modules → home (T12), player (T12), chord_grid (T10), diagrams (T11), placeholder reharm/band/versions tabs (T12), theme (T7). Section 4 server modules → api (T6), ml_worker (T5), ml_interface (T4), db Postgres (T1/T3); signaling deferred to A2 per spec. Section 5 theme → T7. Section 6 placeholders → T12 tabs + T4 stub slot. Section 7 done criteria → T13.
+**Spec coverage:** Section 1 phases → this plan is A0 (A1–A3 deferred, noted in header). Section 2 contract → domain entity (T2) + dart models (T8), names matched. Section 3 app modules → home (T12), player (T12), chord_grid (T10), diagrams (T11), placeholder reharm/band/versions tabs (T12), theme (T7). Section 4 server modules → api adapters (T6), application use case = "ml_worker" role (T5), ml_interface ports + stub slot (T2 ports / T4 impl), db Postgres repository (T1/T3); signaling deferred to A2 per spec. Section 5 theme → T7. Section 6 placeholders → T12 tabs + T4 stub slot. Section 7 done criteria → T13.
+
+**Clean architecture:** domain (T2) imports no framework; application use case (T5) depends only on ports and is tested with a fake repo; infrastructure (T3/T4) implements ports; api (T6) wires via DI. Client mirrors with `SongRepository` boundary (T9) consumed by features (T12).
 
 **Placeholder scan:** Deferred items (signaling, versioning, real models) are explicitly out of A0 scope per spec, not plan gaps. No TBD/TODO in code steps.
 
-**Type consistency:** `AnalysisResult` field names identical across T2/T8 (`songId`, `synchronizedChords`, `beatIndex`, `timeSignature`). `activeChordIndex` signature consistent T10. `showChordDiagram(context, chord)`, `guitarVoicings`, `pianoNotes` consistent T11↔T12. `apiProvider`/`ChordMindApi.submit/get/recent` consistent T9↔T12.
+**Type consistency:** `AnalysisResult` field names identical across T2/T8 (`songId`, `synchronizedChords`, `beatIndex`, `timeSignature`); domain `to_dict()` (T2) ↔ Dart `fromJson` (T8) ↔ API output (T6). `ModelSlot.run(youtube_id,title,duration)` consistent T2/T4/T5. `SongRepository.get/save/recent` consistent T2/T3/T5. `AnalyzeSong.execute` T5↔T6. `activeChordIndex` T10. `showChordDiagram`, `guitarVoicings`, `pianoNotes` T11↔T12. `songRepositoryProvider`/`SongRepository.submit/get/recent` T9↔T12.

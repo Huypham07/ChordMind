@@ -7,3 +7,4 @@ app/mobile/build/
 app/mobile/.dart_tool/
 .dart_tool/
 pgdata/
+*.egg-info/
