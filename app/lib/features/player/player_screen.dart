@@ -1,4 +1,5 @@
 // app/lib/features/player/player_screen.dart
+import 'dart:async';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:youtube_player_iframe/youtube_player_iframe.dart';
@@ -16,6 +17,7 @@ class PlayerScreen extends ConsumerStatefulWidget {
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   late final YoutubePlayerController _yt;
+  StreamSubscription? _sub;
   AnalysisResult? _r;
   double _pos = 0;
 
@@ -24,7 +26,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     super.initState();
     _yt = YoutubePlayerController.fromVideoId(
         videoId: widget.youtubeId, params: const YoutubePlayerParams(showControls: true));
-    _yt.videoStateStream.listen((s) {
+    _sub = _yt.videoStateStream.listen((s) {
       if (mounted) setState(() => _pos = s.position.inMilliseconds / 1000.0);
     });
     ref.read(songRepositoryProvider).get(widget.youtubeId).then((r) => mounted ? setState(() => _r = r) : null);
@@ -32,6 +34,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   @override
   void dispose() {
+    _sub?.cancel();
     _yt.close();
     super.dispose();
   }

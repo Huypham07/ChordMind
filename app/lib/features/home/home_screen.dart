@@ -14,6 +14,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _ctrl = TextEditingController();
   bool _busy = false;
 
+  @override
+  void dispose() {
+    _ctrl.dispose();
+    super.dispose();
+  }
+
   Future<void> _analyze() async {
     setState(() => _busy = true);
     try {
