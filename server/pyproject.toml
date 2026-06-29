@@ -1,0 +1,13 @@
+[project]
+name = "chordmind-server"
+version = "0.0.0"
+requires-python = ">=3.12"
+dependencies = [
+  "fastapi", "uvicorn[standard]", "sqlalchemy>=2", "psycopg[binary]",
+  "pydantic>=2", "pydantic-settings", "yt-dlp",
+]
+[project.optional-dependencies]
+dev = ["pytest", "httpx"]
+
+[tool.pytest.ini_options]
+pythonpath = ["."]
