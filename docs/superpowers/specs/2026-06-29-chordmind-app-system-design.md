@@ -116,10 +116,12 @@ ponytail:
 
 ## 5. Theme / design system
 
-Bản sắc ChordMind mới, định nghĩa một lần ở `core/theme`:
-- Palette mới, light + dark, semantic tokens (surface, chord-active, beat-marker, segment colors…).
-- Typography scale, spacing, widget tái dùng cho chord-cell + diagram.
-- Sẽ chốt 1 trong các palette cụ thể ở bước lập plan implementation.
+Bản sắc ChordMind mới, định nghĩa một lần ở `core/theme` (`ChordMindColors` ThemeExtension):
+- **Palette đã chốt (A0):** seed indigo `0xFF4F46E5`; accent hổ phách `0xFFF59E0B` cho
+  `chordActive` (ô hợp âm đang vang); `beatMarker` = `scheme.primary`; `surfaceAlt` =
+  `scheme.surfaceContainerHighest`. Material 3, light + dark (`ColorScheme.fromSeed`).
+- Semantic tokens (surface, chord-active, beat-marker, segment colors…), typography scale,
+  spacing; widget tái dùng cho chord-cell + diagram.
 
 ---
 
@@ -140,3 +142,32 @@ App chạy: paste URL YouTube → server trả `AnalysisResult` canned → app h
 đồng bộ với player, mở được guitar/piano diagram khi tap ô hợp âm, có lyrics row, toggle
 được light/dark theme. Server + Postgres chạy qua Docker. Re-harm/band/versions là tab
 placeholder hoặc chưa hiện.
+
+---
+
+## 8. Cập nhật hướng tính toán (2026-06-30) — server không GPU
+
+Quyết định (vì server triển khai **không có GPU** + ưu tiên on-device):
+
+1. **Phân tích chạy trên thiết bị người dùng; server CHỈ lưu/cache** `AnalysisResult`
+   (kho "Wikipedia hợp âm" dùng chung). Đây là **hướng chính**.
+2. **Không bỏ hẳn xử lý phía server — chỉ tạm gác.** Giữ nguyên `ml_interface` /
+   `ModelSlot` / `ml_worker` sau lớp trừu tượng để **bật lại được** khi cần test
+   hoặc khi server đủ tài nguyên (vd có GPU). Không xóa code.
+3. **Bản web KHÔNG có chức năng phân tích AI** (web không chạy được TFLite on-device).
+   Web = chỉ xem bài đã phân tích; chặn nút "Analyze" bằng `kIsWeb`. Mobile mới phân tích.
+
+### Ảnh hưởng theo phase
+- **A0 (hiện tại):** không đổi — server vẫn dùng `StubAnalysisSlot` làm placeholder
+  (chỉ là dữ liệu giả, không phải AI, không cần GPU). Web vẫn demo được vì "phân tích"
+  hiện do stub server tạo.
+- **A1 (khi gắn model thật):**
+  - Thêm endpoint để **thiết bị upload `AnalysisResult`** đã tính → server lưu/cache.
+  - Đường server-side (`AnalyzeSong` + slot thật) giữ lại như **tùy chọn tạm tắt**.
+  - App: chặn phân tích trên web (`kIsWeb`); mobile chạy model lượng hóa on-device.
+  - Nhờ hợp đồng JSON cố định ở `ml_interface`, đổi hướng **không phải sửa UI**.
+
+### Triển khai hạ tầng (2 file compose)
+- `docker-compose.infra.yml` — dịch vụ có state (Postgres). Tạo network `chordmind`.
+- `docker-compose.app.yml` — dịch vụ stateless: `server` (FastAPI) + `web` (Flutter web
+  build qua nginx). Nối vào network `chordmind` để gọi Postgres bằng host `db`.
