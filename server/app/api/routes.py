@@ -13,7 +13,10 @@ def health():
 
 @router.post("/songs")
 def submit_song(body: SubmitRequest, uc: AnalyzeSong = Depends(get_analyze_song)):
-    vid = youtube.parse_video_id(body.url)
+    try:
+        vid = youtube.parse_video_id(body.url)
+    except ValueError:
+        raise HTTPException(status_code=400, detail="invalid YouTube URL")
     title, duration = youtube.fetch_meta(vid)
     return uc.execute(vid, title, duration).to_dict()
 

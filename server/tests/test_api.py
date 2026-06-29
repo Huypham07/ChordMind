@@ -34,6 +34,11 @@ def test_parse_video_id():
     assert youtube.parse_video_id("https://www.youtube.com/watch?v=abcdefghijk") == "abcdefghijk"
     assert youtube.parse_video_id("https://youtu.be/abcdefghijk") == "abcdefghijk"
 
+def test_bad_url_returns_400(monkeypatch):
+    c = _client(monkeypatch)
+    r = c.post("/songs", json={"url": "not a youtube link"})
+    assert r.status_code == 400
+
 def test_submit_and_fetch(monkeypatch):
     c = _client(monkeypatch)
     r = c.post("/songs", json={"url": "https://youtu.be/abcdefghijk"})

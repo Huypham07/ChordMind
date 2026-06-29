@@ -25,6 +25,12 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     try {
       final r = await ref.read(songRepositoryProvider).submit(_ctrl.text);
       if (mounted) context.go('/player/${r.source.youtubeId}');
+    } catch (_) {
+      if (mounted) {
+        ScaffoldMessenger.of(context).showSnackBar(
+          const SnackBar(content: Text('Could not analyze that link. Check the YouTube URL.')),
+        );
+      }
     } finally {
       if (mounted) setState(() => _busy = false);
     }
