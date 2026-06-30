@@ -43,7 +43,20 @@ class AppScaffold extends StatelessWidget {
     if (ff == FormFactor.compact) {
       return Scaffold(
         extendBody: true,
-        appBar: AppBar(title: Text(title), actions: navActions, scrolledUnderElevation: 0),
+        appBar: AppBar(
+          title: Row(
+            mainAxisSize: MainAxisSize.min,
+            children: [
+              if (title == 'ChordMind') ...[
+                Image.asset('assets/images/music_note.png', width: 28, height: 28),
+                const SizedBox(width: 8),
+              ],
+              Text(title),
+            ],
+          ),
+          actions: navActions,
+          scrolledUnderElevation: 0,
+        ),
         body: SafeArea(bottom: false, child: body),
         bottomNavigationBar: _MusicBottomNav(index: navIndex, onTap: onNav),
       );
@@ -80,9 +93,10 @@ class _BrandMark extends StatelessWidget {
   const _BrandMark({this.size = 30});
   @override
   Widget build(BuildContext context) {
-    return ShaderMask(
-      shaderCallback: (r) => AppGradients.brand.createShader(r),
-      child: Icon(Icons.graphic_eq_rounded, size: size, color: Colors.white),
+    return Image.asset(
+      'assets/images/music_note.png',
+      width: size,
+      height: size,
     );
   }
 }
@@ -131,25 +145,29 @@ class _NavPill extends StatelessWidget {
     return GestureDetector(
       behavior: HitTestBehavior.opaque,
       onTap: onTap,
-      child: AnimatedContainer(
-        duration: const Duration(milliseconds: 240),
-        curve: Curves.easeOutCubic,
-        padding: EdgeInsets.symmetric(horizontal: active ? AppSpace.s16 : AppSpace.s12, vertical: 10),
-        decoration: BoxDecoration(
-          gradient: active ? AppGradients.brand : null,
-          borderRadius: BorderRadius.circular(AppRadii.pill),
-          boxShadow: active
-              ? [BoxShadow(color: const Color(0xFFEC4899).withValues(alpha: 0.45), blurRadius: 16, offset: const Offset(0, 4))]
-              : null,
+      child: Column(mainAxisSize: MainAxisSize.min, children: [
+        AnimatedContainer(
+          duration: const Duration(milliseconds: 240),
+          curve: Curves.easeOutCubic,
+          width: 56,
+          height: 32,
+          decoration: BoxDecoration(
+            gradient: active ? AppGradients.brand : null,
+            color: active ? null : Colors.transparent,
+            borderRadius: BorderRadius.circular(AppRadii.lg),
+            boxShadow: active
+                ? [BoxShadow(color: const Color(0xFFEC4899).withValues(alpha: 0.40), blurRadius: 16, offset: const Offset(0, 4))]
+                : null,
+          ),
+          child: Icon(active ? dest.sel : dest.icon, size: 22, color: active ? Colors.white : cm.textMuted),
         ),
-        child: Row(mainAxisSize: MainAxisSize.min, children: [
-          Icon(active ? dest.sel : dest.icon, size: 22, color: active ? Colors.white : cm.textMuted),
-          if (active) ...[
-            const SizedBox(width: AppSpace.s8),
-            Text(dest.label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
-          ],
-        ]),
-      ),
+        const SizedBox(height: 4),
+        Text(dest.label,
+            style: TextStyle(
+                fontSize: 11,
+                fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                color: active ? Theme.of(context).colorScheme.onSurface : cm.textMuted)),
+      ]),
     );
   }
 }

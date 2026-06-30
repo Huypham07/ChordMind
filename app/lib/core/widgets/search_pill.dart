@@ -25,6 +25,7 @@ class SearchPill extends StatelessWidget {
           child: TextField(
             controller: controller,
             onSubmitted: (_) => onSubmit(),
+            onTapOutside: (_) => FocusManager.instance.primaryFocus?.unfocus(),
             decoration: InputDecoration(hintText: hint, border: InputBorder.none),
           ),
         ),
