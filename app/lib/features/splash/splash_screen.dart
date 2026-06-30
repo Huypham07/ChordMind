@@ -20,7 +20,7 @@ class _SplashScreenState extends State<SplashScreen> with SingleTickerProviderSt
     // continuous up/down "jump"
     _bob = AnimationController(vsync: this, duration: const Duration(milliseconds: 650))
       ..repeat(reverse: true);
-    Timer(const Duration(milliseconds: 1900), () {
+    Timer(const Duration(seconds: 3), () {
       if (mounted) context.go('/');
     });
   }

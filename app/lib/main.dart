@@ -16,6 +16,7 @@ class ChordMindApp extends ConsumerWidget {
         theme: chordMindLight,
         darkTheme: chordMindDark,
         themeMode: ref.watch(themeModeProvider),
+        themeAnimationDuration: Duration.zero,
         routerConfig: router,
       );
 }
