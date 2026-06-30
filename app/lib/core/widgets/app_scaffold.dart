@@ -1,7 +1,9 @@
 // app/lib/core/widgets/app_scaffold.dart
 import 'package:flutter/material.dart';
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 import '../breakpoints.dart';
 import '../theme.dart';
+import '../theme_mode.dart';
 
 typedef _Dest = ({IconData icon, IconData sel, String label});
 
@@ -36,11 +38,12 @@ class AppScaffold extends StatelessWidget {
   Widget _build(BuildContext context, double width) {
     final ff = formFactorFor(width);
     final cm = Theme.of(context).extension<ChordMindColors>()!;
+    final navActions = actions ?? const [_ThemeToggle()];
 
     if (ff == FormFactor.compact) {
       return Scaffold(
         extendBody: true,
-        appBar: AppBar(title: Text(title), actions: actions, scrolledUnderElevation: 0),
+        appBar: AppBar(title: Text(title), actions: navActions, scrolledUnderElevation: 0),
         body: SafeArea(bottom: false, child: body),
         bottomNavigationBar: _MusicBottomNav(index: navIndex, onTap: onNav),
       );
@@ -61,7 +64,7 @@ class AppScaffold extends StatelessWidget {
           VerticalDivider(width: 1, color: cm.border),
           Expanded(
             child: Column(children: [
-              _TopBar(title: title, actions: actions),
+              _TopBar(title: title, actions: navActions),
               Expanded(child: content),
             ]),
           ),
@@ -211,6 +214,23 @@ class _RailTile extends StatelessWidget {
                   color: active ? Theme.of(context).colorScheme.onSurface : cm.textMuted)),
         ]),
       ),
+    );
+  }
+}
+
+/// Light/dark toggle, shown by default in the nav top bar / app bar.
+class _ThemeToggle extends ConsumerWidget {
+  const _ThemeToggle();
+  @override
+  Widget build(BuildContext context, WidgetRef ref) {
+    final mode = ref.watch(themeModeProvider);
+    final dark = mode == ThemeMode.dark ||
+        (mode == ThemeMode.system && MediaQuery.platformBrightnessOf(context) == Brightness.dark);
+    return IconButton(
+      tooltip: 'Đổi sáng/tối',
+      icon: Icon(dark ? Icons.light_mode_outlined : Icons.dark_mode_outlined),
+      onPressed: () =>
+          ref.read(themeModeProvider.notifier).state = dark ? ThemeMode.light : ThemeMode.dark,
     );
   }
 }
