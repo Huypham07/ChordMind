@@ -22,8 +22,8 @@ class AppShadows {
   static List<BoxShadow> soft(Brightness b) => [
         BoxShadow(
           color: b == Brightness.dark
-              ? Colors.black.withOpacity(0.40)
-              : const Color(0xFF141020).withOpacity(0.08),
+              ? Colors.black.withValues(alpha: 0.40)
+              : const Color(0xFF141020).withValues(alpha: 0.08),
           blurRadius: 16,
           offset: const Offset(0, 4),
         ),
@@ -116,9 +116,9 @@ ThemeData _theme(Brightness b) {
         surfaceAlt: dark ? const Color(0xFF232030) : const Color(0xFFF2F1F5),
         textMuted: dark ? const Color(0xFF9D98AD) : const Color(0xFF6B6878),
         border: dark ? const Color(0xFF2A2733) : const Color(0xFFE6E4EC),
-        segmentVerse: _primary.withOpacity(0.14),
-        segmentChorus: _secondary.withOpacity(0.14),
-        segmentOther: (dark ? Colors.white : Colors.black).withOpacity(0.06),
+        segmentVerse: _primary.withValues(alpha: 0.14),
+        segmentChorus: _secondary.withValues(alpha: 0.14),
+        segmentOther: (dark ? Colors.white : Colors.black).withValues(alpha: 0.06),
         danger: const Color(0xFFF43F5E),
       ),
     ],
