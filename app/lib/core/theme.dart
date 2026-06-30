@@ -1,6 +1,8 @@
 // app/lib/core/theme.dart
 import 'package:flutter/material.dart';
-import 'package:google_fonts/google_fonts.dart';
+
+// Bundled Google Sans (SIL OFL 1.1) — see assets/fonts/GoogleSans-OFL.txt.
+const _fontFamily = 'Google Sans';
 
 class AppRadii {
   static const sm = 8.0, md = 12.0, lg = 16.0, xl = 20.0, pill = 999.0;
@@ -100,13 +102,11 @@ ThemeData _theme(Brightness b) {
 
   final base = ThemeData(useMaterial3: true, colorScheme: scheme, scaffoldBackgroundColor: bg);
   return base.copyWith(
-    // Plus Jakarta Sans — closest open look-alike to Google Sans (geometric, rounded).
-    // Swap to a bundled Google Sans here if a licensed .ttf is added to assets/fonts.
-    textTheme: GoogleFonts.plusJakartaSansTextTheme(base.textTheme).copyWith(
-      displaySmall: GoogleFonts.plusJakartaSans(fontSize: 28, fontWeight: FontWeight.w700, color: text),
-      headlineSmall: GoogleFonts.plusJakartaSans(fontSize: 22, fontWeight: FontWeight.w700, color: text),
-      titleLarge: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.w600, color: text),
-      titleMedium: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.w600, color: text),
+    textTheme: base.textTheme.apply(fontFamily: _fontFamily, bodyColor: text, displayColor: text).copyWith(
+      displaySmall: TextStyle(fontFamily: _fontFamily, fontSize: 28, fontWeight: FontWeight.w700, color: text),
+      headlineSmall: TextStyle(fontFamily: _fontFamily, fontSize: 22, fontWeight: FontWeight.w700, color: text),
+      titleLarge: TextStyle(fontFamily: _fontFamily, fontSize: 18, fontWeight: FontWeight.w600, color: text),
+      titleMedium: TextStyle(fontFamily: _fontFamily, fontSize: 16, fontWeight: FontWeight.w600, color: text),
     ),
     extensions: [
       ChordMindColors(
