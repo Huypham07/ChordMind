@@ -100,11 +100,13 @@ ThemeData _theme(Brightness b) {
 
   final base = ThemeData(useMaterial3: true, colorScheme: scheme, scaffoldBackgroundColor: bg);
   return base.copyWith(
-    textTheme: GoogleFonts.interTextTheme(base.textTheme).copyWith(
-      displaySmall: GoogleFonts.sora(fontSize: 28, fontWeight: FontWeight.w700, color: text),
-      headlineSmall: GoogleFonts.sora(fontSize: 22, fontWeight: FontWeight.w700, color: text),
-      titleLarge: GoogleFonts.sora(fontSize: 18, fontWeight: FontWeight.w600, color: text),
-      titleMedium: GoogleFonts.sora(fontSize: 16, fontWeight: FontWeight.w600, color: text),
+    // Plus Jakarta Sans — closest open look-alike to Google Sans (geometric, rounded).
+    // Swap to a bundled Google Sans here if a licensed .ttf is added to assets/fonts.
+    textTheme: GoogleFonts.plusJakartaSansTextTheme(base.textTheme).copyWith(
+      displaySmall: GoogleFonts.plusJakartaSans(fontSize: 28, fontWeight: FontWeight.w700, color: text),
+      headlineSmall: GoogleFonts.plusJakartaSans(fontSize: 22, fontWeight: FontWeight.w700, color: text),
+      titleLarge: GoogleFonts.plusJakartaSans(fontSize: 18, fontWeight: FontWeight.w600, color: text),
+      titleMedium: GoogleFonts.plusJakartaSans(fontSize: 16, fontWeight: FontWeight.w600, color: text),
     ),
     extensions: [
       ChordMindColors(

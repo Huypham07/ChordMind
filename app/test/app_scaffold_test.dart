@@ -12,16 +12,18 @@ void main() {
     expect(formFactorFor(1300), FormFactor.expanded);
   });
 
-  testWidgets('expanded shows NavigationRail, compact shows NavigationBar', (t) async {
+  testWidgets('expanded shows the rail, compact shows the bottom nav', (t) async {
     await t.binding.setSurfaceSize(const Size(1300, 900));
     await t.pumpWidget(MaterialApp(theme: chordMindLight,
       home: const AppScaffold(title: 'X', body: SizedBox())));
-    expect(find.byType(NavigationRail), findsOneWidget);
+    expect(find.byKey(const Key('nav-rail')), findsOneWidget);
+    expect(find.byKey(const Key('nav-bottom')), findsNothing);
 
     await t.binding.setSurfaceSize(const Size(420, 900));
     await t.pumpWidget(MaterialApp(theme: chordMindLight,
       home: const AppScaffold(title: 'X', body: SizedBox())));
-    expect(find.byType(NavigationBar), findsOneWidget);
+    expect(find.byKey(const Key('nav-bottom')), findsOneWidget);
+    expect(find.byKey(const Key('nav-rail')), findsNothing);
     await t.binding.setSurfaceSize(null);
   });
 }

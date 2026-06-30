@@ -3,10 +3,12 @@ import 'package:flutter/material.dart';
 import '../breakpoints.dart';
 import '../theme.dart';
 
-const _dests = [
-  (icon: Icons.home_outlined, sel: Icons.home, label: 'Home'),
-  (icon: Icons.library_music_outlined, sel: Icons.library_music, label: 'Library'),
-  (icon: Icons.settings_outlined, sel: Icons.settings, label: 'Settings'),
+typedef _Dest = ({IconData icon, IconData sel, String label});
+
+const _dests = <_Dest>[
+  (icon: Icons.home_outlined, sel: Icons.home_rounded, label: 'Home'),
+  (icon: Icons.library_music_outlined, sel: Icons.library_music_rounded, label: 'Library'),
+  (icon: Icons.tune_outlined, sel: Icons.tune_rounded, label: 'Settings'),
 ];
 
 class AppScaffold extends StatelessWidget {
@@ -37,16 +39,10 @@ class AppScaffold extends StatelessWidget {
 
     if (ff == FormFactor.compact) {
       return Scaffold(
-        appBar: AppBar(title: Text(title), actions: actions),
-        body: SafeArea(child: body),
-        bottomNavigationBar: NavigationBar(
-          selectedIndex: navIndex,
-          onDestinationSelected: onNav,
-          destinations: [
-            for (final d in _dests)
-              NavigationDestination(icon: Icon(d.icon), selectedIcon: Icon(d.sel), label: d.label),
-          ],
-        ),
+        extendBody: true,
+        appBar: AppBar(title: Text(title), actions: actions, scrolledUnderElevation: 0),
+        body: SafeArea(bottom: false, child: body),
+        bottomNavigationBar: _MusicBottomNav(index: navIndex, onTap: onNav),
       );
     }
 
@@ -61,22 +57,7 @@ class AppScaffold extends StatelessWidget {
     return Scaffold(
       body: SafeArea(
         child: Row(children: [
-          NavigationRail(
-            selectedIndex: navIndex,
-            onDestinationSelected: onNav,
-            labelType: NavigationRailLabelType.all,
-            leading: Padding(
-              padding: const EdgeInsets.symmetric(vertical: 16),
-              child: ShaderMask(
-                shaderCallback: (r) => AppGradients.brand.createShader(r),
-                child: const Icon(Icons.graphic_eq, size: 32, color: Colors.white),
-              ),
-            ),
-            destinations: [
-              for (final d in _dests)
-                NavigationRailDestination(icon: Icon(d.icon), selectedIcon: Icon(d.sel), label: Text(d.label)),
-            ],
-          ),
+          _MusicRail(index: navIndex, onTap: onNav),
           VerticalDivider(width: 1, color: cm.border),
           Expanded(
             child: Column(children: [
@@ -90,6 +71,150 @@ class AppScaffold extends StatelessWidget {
   }
 }
 
+/// Brand mark: a gradient waveform/EQ glyph.
+class _BrandMark extends StatelessWidget {
+  final double size;
+  const _BrandMark({this.size = 30});
+  @override
+  Widget build(BuildContext context) {
+    return ShaderMask(
+      shaderCallback: (r) => AppGradients.brand.createShader(r),
+      child: Icon(Icons.graphic_eq_rounded, size: size, color: Colors.white),
+    );
+  }
+}
+
+/// Floating, rounded mobile nav. Active item is a gradient pill that lifts (glow)
+/// and reveals its label — raised + smooth.
+class _MusicBottomNav extends StatelessWidget {
+  final int index;
+  final ValueChanged<int>? onTap;
+  const _MusicBottomNav({required this.index, this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    final cm = Theme.of(context).extension<ChordMindColors>()!;
+    return SafeArea(
+      top: false,
+      child: Container(
+        key: const Key('nav-bottom'),
+        margin: const EdgeInsets.fromLTRB(AppSpace.s16, 0, AppSpace.s16, AppSpace.s12),
+        padding: const EdgeInsets.all(AppSpace.s8),
+        decoration: BoxDecoration(
+          color: Theme.of(context).colorScheme.surface,
+          borderRadius: BorderRadius.circular(28),
+          border: Border.all(color: cm.border),
+          boxShadow: AppShadows.soft(Theme.of(context).brightness),
+        ),
+        child: Row(
+          mainAxisAlignment: MainAxisAlignment.spaceAround,
+          children: [
+            for (var i = 0; i < _dests.length; i++)
+              _NavPill(dest: _dests[i], active: i == index, onTap: () => onTap?.call(i)),
+          ],
+        ),
+      ),
+    );
+  }
+}
+
+class _NavPill extends StatelessWidget {
+  final _Dest dest;
+  final bool active;
+  final VoidCallback onTap;
+  const _NavPill({required this.dest, required this.active, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    final cm = Theme.of(context).extension<ChordMindColors>()!;
+    return GestureDetector(
+      behavior: HitTestBehavior.opaque,
+      onTap: onTap,
+      child: AnimatedContainer(
+        duration: const Duration(milliseconds: 240),
+        curve: Curves.easeOutCubic,
+        padding: EdgeInsets.symmetric(horizontal: active ? AppSpace.s16 : AppSpace.s12, vertical: 10),
+        decoration: BoxDecoration(
+          gradient: active ? AppGradients.brand : null,
+          borderRadius: BorderRadius.circular(AppRadii.pill),
+          boxShadow: active
+              ? [BoxShadow(color: const Color(0xFFEC4899).withValues(alpha: 0.45), blurRadius: 16, offset: const Offset(0, 4))]
+              : null,
+        ),
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
+          Icon(active ? dest.sel : dest.icon, size: 22, color: active ? Colors.white : cm.textMuted),
+          if (active) ...[
+            const SizedBox(width: AppSpace.s8),
+            Text(dest.label, style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w700, fontSize: 13)),
+          ],
+        ]),
+      ),
+    );
+  }
+}
+
+/// Custom web rail: gradient brand mark + vertical items; active item is a
+/// gradient rounded tile with glow.
+class _MusicRail extends StatelessWidget {
+  final int index;
+  final ValueChanged<int>? onTap;
+  const _MusicRail({required this.index, this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    return Container(
+      key: const Key('nav-rail'),
+      width: 84,
+      color: Theme.of(context).colorScheme.surface,
+      child: Column(children: [
+        const SizedBox(height: AppSpace.s24),
+        const _BrandMark(size: 34),
+        const SizedBox(height: AppSpace.s32),
+        for (var i = 0; i < _dests.length; i++)
+          _RailTile(dest: _dests[i], active: i == index, onTap: () => onTap?.call(i)),
+      ]),
+    );
+  }
+}
+
+class _RailTile extends StatelessWidget {
+  final _Dest dest;
+  final bool active;
+  final VoidCallback onTap;
+  const _RailTile({required this.dest, required this.active, required this.onTap});
+  @override
+  Widget build(BuildContext context) {
+    final cm = Theme.of(context).extension<ChordMindColors>()!;
+    return Padding(
+      padding: const EdgeInsets.symmetric(vertical: AppSpace.s8),
+      child: GestureDetector(
+        behavior: HitTestBehavior.opaque,
+        onTap: onTap,
+        child: Column(children: [
+          AnimatedContainer(
+            duration: const Duration(milliseconds: 240),
+            curve: Curves.easeOutCubic,
+            width: 52,
+            height: 44,
+            decoration: BoxDecoration(
+              gradient: active ? AppGradients.brand : null,
+              color: active ? null : cm.surfaceAlt,
+              borderRadius: BorderRadius.circular(AppRadii.lg),
+              boxShadow: active
+                  ? [BoxShadow(color: const Color(0xFFEC4899).withValues(alpha: 0.40), blurRadius: 16, offset: const Offset(0, 4))]
+                  : null,
+            ),
+            child: Icon(active ? dest.sel : dest.icon, size: 22, color: active ? Colors.white : cm.textMuted),
+          ),
+          const SizedBox(height: 4),
+          Text(dest.label,
+              style: TextStyle(
+                  fontSize: 11,
+                  fontWeight: active ? FontWeight.w700 : FontWeight.w500,
+                  color: active ? Theme.of(context).colorScheme.onSurface : cm.textMuted)),
+        ]),
+      ),
+    );
+  }
+}
+
 class _TopBar extends StatelessWidget {
   final String title;
   final List<Widget>? actions;
@@ -97,7 +222,7 @@ class _TopBar extends StatelessWidget {
   @override
   Widget build(BuildContext context) {
     return Padding(
-      padding: const EdgeInsets.fromLTRB(24, 16, 16, 8),
+      padding: const EdgeInsets.fromLTRB(AppSpace.s24, AppSpace.s16, AppSpace.s16, AppSpace.s8),
       child: Row(children: [
         Text(title, style: Theme.of(context).textTheme.headlineSmall),
         const Spacer(),
