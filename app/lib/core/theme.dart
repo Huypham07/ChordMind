@@ -94,8 +94,6 @@ ThemeData _theme(Brightness b) {
     primary: _primary,
     secondary: _secondary,
     surface: dark ? const Color(0xFF1A1820) : Colors.white,
-  ).copyWith(
-    surface: dark ? const Color(0xFF1A1820) : Colors.white,
   );
   final bg = dark ? const Color(0xFF0E0D12) : const Color(0xFFFAFAFB);
   final text = dark ? const Color(0xFFECEAF2) : const Color(0xFF1A1820);
