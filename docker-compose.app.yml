@@ -1,0 +1,23 @@
+# ChordMind — application stack (stateless): API server + web client.
+# Requires the infra stack (Postgres + `chordmind` network) to be up first:
+#   docker compose -f docker-compose.infra.yml up -d
+#   flutter build web --project-name chordmind   # from app/ — web image serves the build
+#   docker compose -f docker-compose.app.yml up --build
+services:
+  server:
+    build: ./server
+    environment:
+      # reaches Postgres by service name `db` over the shared network
+      DATABASE_URL: postgresql+psycopg://chordmind:chordmind@db:5432/chordmind
+    ports: ["8000:8000"]
+    networks: [chordmind]
+
+  web:
+    build: ./app          # ponytail: serves a pre-built Flutter web bundle (run `flutter build web` first)
+    ports: ["8080:80"]
+    depends_on: [server]
+    networks: [chordmind]
+
+networks:
+  chordmind:
+    external: true        # created by docker-compose.infra.yml

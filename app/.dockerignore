@@ -1,0 +1,4 @@
+# web image only needs the prebuilt bundle + nginx config
+*
+!build/web
+!nginx.conf
