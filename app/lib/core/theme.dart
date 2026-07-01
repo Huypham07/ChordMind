@@ -20,6 +20,36 @@ class AppGradients {
   );
 }
 
+/// Extra accent colors beyond the violet→pink brand — for the beat cursor,
+/// song sections, and status chips. Constant across light/dark.
+class AppAccents {
+  static const cyan = Color(0xFF22D3EE);
+  static const amber = Color(0xFFF59E0B);
+  static const green = Color(0xFF34D399);
+  static const blue = Color(0xFF60A5FA);
+
+  /// Beat cursor that sweeps the chord grid.
+  static const beatCursor = cyan;
+
+  /// A distinct color per song section (intro/verse/chorus/bridge/outro…).
+  static Color segment(String label) {
+    switch (label.toLowerCase()) {
+      case 'verse':
+        return const Color(0xFF8B5CF6); // violet
+      case 'chorus':
+        return const Color(0xFFEC4899); // pink
+      case 'bridge':
+        return cyan;
+      case 'intro':
+        return amber;
+      case 'outro':
+        return green;
+      default:
+        return blue;
+    }
+  }
+}
+
 class AppShadows {
   static List<BoxShadow> soft(Brightness b) => [
         BoxShadow(

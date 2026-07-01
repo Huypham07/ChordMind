@@ -7,6 +7,9 @@ import '../../core/widgets/info_chip.dart';
 import '../../core/widgets/section_header.dart';
 import '../../core/widgets/pill_tabs.dart';
 import '../../core/widgets/search_pill.dart';
+import '../../core/sample.dart';
+import '../chord_grid/chord_grid.dart';
+import '../chord_grid/current_chord_bar.dart';
 
 /// Screenshot target: renders the component gallery. Not part of normal navigation.
 class PreviewScreen extends StatefulWidget {
@@ -41,6 +44,14 @@ class _PreviewScreenState extends State<PreviewScreen> {
         AppCard(child: Text('A surface card', style: Theme.of(context).textTheme.titleMedium)),
         const SizedBox(height: AppSpace.s12),
         SearchPill(controller: TextEditingController(), onSubmit: () {}),
+        const SizedBox(height: AppSpace.s24),
+        const SectionHeader(title: 'Chord grid (beat cursor @ 2.5s)'),
+        CurrentChordBar(result: sampleAnalysis, positionSeconds: 2.5),
+        const SizedBox(height: AppSpace.s8),
+        SizedBox(
+          height: 360,
+          child: ChordGrid(result: sampleAnalysis, positionSeconds: 2.5),
+        ),
       ]),
     );
   }

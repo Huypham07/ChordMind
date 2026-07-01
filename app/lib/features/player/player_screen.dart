@@ -76,17 +76,22 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
         : Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
             Padding(
               padding: const EdgeInsets.all(AppSpace.s16),
-              child: AppCard(
-                  padding: EdgeInsets.zero,
-                  child: AspectRatio(
-                      aspectRatio: 16 / 9,
-                      child: _yt != null
-                          ? YoutubePlayer(controller: _yt!)
-                          : Container(
-                              color: Colors.black,
-                              child: const Center(
-                                  child: Icon(Icons.play_circle_outline,
-                                      color: Colors.white54, size: 64))))),
+              child: Center(
+                child: ConstrainedBox(
+                  constraints: const BoxConstraints(maxWidth: 460),
+                  child: AppCard(
+                      padding: EdgeInsets.zero,
+                      child: AspectRatio(
+                          aspectRatio: 16 / 9,
+                          child: _yt != null
+                              ? YoutubePlayer(controller: _yt!)
+                              : Container(
+                                  color: Colors.black,
+                                  child: const Center(
+                                      child: Icon(Icons.play_circle_outline,
+                                          color: Colors.white54, size: 64))))),
+                ),
+              ),
             ),
             Padding(
               padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16),
