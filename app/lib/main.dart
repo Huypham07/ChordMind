@@ -4,8 +4,13 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'core/theme.dart';
 import 'core/theme_mode.dart';
 import 'core/router.dart';
+import 'features/diagrams/voicings.dart';
 
-void main() => runApp(const ProviderScope(child: ChordMindApp()));
+void main() async {
+  WidgetsFlutterBinding.ensureInitialized();
+  await loadGuitarDb(); // preload guitar voicings so diagrams render instantly
+  runApp(const ProviderScope(child: ChordMindApp()));
+}
 
 class ChordMindApp extends ConsumerWidget {
   const ChordMindApp({super.key});

@@ -42,6 +42,31 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   @override
   void initState() {
     super.initState();
+    _loadAnalysis();
+    // The WebView is a heavy platform view; creating it in initState janks the
+    // push transition ("khựng 1 nhịp"). Defer it until the slide-in finishes —
+    // the video slot shows a placeholder until then, so the transition stays smooth.
+    WidgetsBinding.instance.addPostFrameCallback((_) => _initPlayerWhenSettled());
+  }
+
+  void _initPlayerWhenSettled() {
+    if (!mounted) return;
+    final anim = ModalRoute.of(context)?.animation;
+    if (anim == null || anim.isCompleted) {
+      _initPlayer();
+      return;
+    }
+    void onStatus(AnimationStatus s) {
+      if (s == AnimationStatus.completed) {
+        anim.removeStatusListener(onStatus);
+        _initPlayer();
+      }
+    }
+    anim.addStatusListener(onStatus);
+  }
+
+  void _initPlayer() {
+    if (!mounted) return;
     try {
       _yt = YoutubePlayerController.fromVideoId(
           videoId: widget.youtubeId,
@@ -51,11 +76,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       _sub = _yt!.videoStateStream.listen((s) {
         _pos.value = s.position.inMilliseconds / 1000.0;
       });
+      setState(() {}); // swap the placeholder for the real player
     } catch (_) {
       // YoutubePlayerController may throw in test/headless environments;
       // the rest of the screen still renders without the player.
     }
-    _loadAnalysis();
   }
 
   /// Best-effort: the video plays regardless. We only ask the storage server for
@@ -162,8 +187,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           padding: const EdgeInsets.all(AppSpace.s16),
           child: ValueListenableBuilder<double>(
             valueListenable: _pos,
-            builder: (_, pos, _) =>
-                CurrentChordBar(result: r, positionSeconds: pos, semitones: _transpose),
+            builder: (_, pos, _) => CurrentChordBar(
+                result: r, positionSeconds: pos, semitones: _transpose, songKey: r.key),
           ),
         ),
         Padding(
@@ -194,8 +219,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       case 0:
         return ValueListenableBuilder<double>(
           valueListenable: _pos,
-          builder: (_, pos, _) =>
-              ChordGrid(result: r, positionSeconds: pos, semitones: _transpose, onTapChord: _onTapChord),
+          builder: (_, pos, _) => ChordGrid(
+              result: r,
+              positionSeconds: pos,
+              semitones: _transpose,
+              songKey: r.key,
+              onTapChord: _onTapChord),
         );
       case 1:
         return const EmptyState(icon: Icons.lyrics_outlined, title: 'Lời bài hát', subtitle: 'Sắp ra mắt');
@@ -238,7 +267,10 @@ class _TransposeControl extends StatelessWidget {
             width: 28,
             child: Text(label,
                 textAlign: TextAlign.center,
-                style: const TextStyle(fontWeight: FontWeight.w700, fontFeatures: [FontFeature.tabularFigures()])),
+                style: TextStyle(
+                    fontWeight: FontWeight.w700,
+                    color: Theme.of(context).colorScheme.onSurface, // explicit → no theme fade
+                    fontFeatures: const [FontFeature.tabularFigures()])),
           ),
         ),
         IconButton(

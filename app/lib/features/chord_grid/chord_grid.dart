@@ -10,12 +10,14 @@ class ChordGrid extends StatelessWidget {
   final AnalysisResult result;
   final double positionSeconds;
   final int semitones;
+  final String songKey;
   final void Function(String chord)? onTapChord;
   const ChordGrid({
     super.key,
     required this.result,
     required this.positionSeconds,
     this.semitones = 0,
+    this.songKey = 'C major',
     this.onTapChord,
   });
 
@@ -40,7 +42,7 @@ class ChordGrid extends StatelessWidget {
     final labelAt = <int, String>{};
     for (final sc in result.synchronizedChords) {
       if (sc.beatIndex >= 0 && sc.beatIndex < beats.length) {
-        labelAt[sc.beatIndex] = transposeChord(sc.chord, semitones);
+        labelAt[sc.beatIndex] = transposeChord(sc.chord, semitones, key: songKey);
       }
     }
     final chordPerBeat = List<String?>.filled(beats.length, null);
@@ -177,29 +179,43 @@ class _BeatCell extends StatelessWidget {
 
   @override
   Widget build(BuildContext context) {
+    final radius = BorderRadius.circular(AppRadii.sm);
     return Expanded(
       child: GestureDetector(
         onTap: chord != null ? () => onTapChord?.call(chord!) : null,
-        child: AnimatedContainer(
-          duration: const Duration(milliseconds: 120),
-          curve: Curves.easeOut,
+        // Base: theme-driven colour, changes instantly on theme toggle (no tween).
+        child: Container(
           height: 50,
           margin: const EdgeInsets.all(2),
           decoration: BoxDecoration(
-            gradient: active ? const LinearGradient(colors: [AppAccents.cyan, AppAccents.blue]) : null,
-            color: active ? null : (label != null ? cm.chordIdle : Colors.transparent),
-            borderRadius: BorderRadius.circular(AppRadii.sm),
-            boxShadow: active
-                ? [BoxShadow(color: AppAccents.cyan.withValues(alpha: 0.5), blurRadius: 14, spreadRadius: 1)]
-                : null,
+            color: label != null ? cm.chordIdle : Colors.transparent,
+            borderRadius: radius,
           ),
-          alignment: Alignment.center,
-          child: label != null
-              ? Text(label!,
-                  maxLines: 1,
-                  style: TextStyle(
-                      fontWeight: FontWeight.w800, fontSize: 15, color: active ? Colors.white : null))
-              : Text(active ? '' : '·', style: TextStyle(color: cm.textMuted, fontSize: 12)),
+          // Highlight: only the beat cursor animates, and it uses fixed colours,
+          // so switching theme has nothing to tween here.
+          child: AnimatedContainer(
+            duration: const Duration(milliseconds: 120),
+            curve: Curves.easeOut,
+            decoration: BoxDecoration(
+              gradient: active ? const LinearGradient(colors: [AppAccents.cyan, AppAccents.blue]) : null,
+              borderRadius: radius,
+              boxShadow: active
+                  ? [BoxShadow(color: AppAccents.cyan.withValues(alpha: 0.5), blurRadius: 14, spreadRadius: 1)]
+                  : null,
+            ),
+            alignment: Alignment.center,
+            child: label != null
+                ? Text(label!,
+                    maxLines: 1,
+                    style: TextStyle(
+                        fontWeight: FontWeight.w800,
+                        fontSize: 15,
+                        // Explicit colour (not null) so it doesn't inherit Material's
+                        // AnimatedDefaultTextStyle, which fades text over ~200ms on
+                        // theme change. Explicit → instant, like the home screen.
+                        color: active ? Colors.white : Theme.of(context).colorScheme.onSurface))
+                : Text(active ? '' : '·', style: TextStyle(color: cm.textMuted, fontSize: 12)),
+          ),
         ),
       ),
     );

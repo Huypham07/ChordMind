@@ -75,6 +75,7 @@ flutter:
 
   assets:
     - assets/images/
+    - assets/data/guitar.json  # @tombatossals/chords-db guitar voicings (MIT)
 
   # Google Sans (SIL Open Font License 1.1 — see assets/fonts/GoogleSans-OFL.txt)
   fonts:

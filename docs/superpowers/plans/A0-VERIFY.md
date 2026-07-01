@@ -36,3 +36,21 @@ Clean Architecture holds both sides; server↔client `AnalysisResult` contract m
 - **`recent()`** endpoint + client method exist but no screen lists recents (dead until a "recent songs" UI is added).
 - `ChordMindColors.lerp` ignores `t` (no animated theme transitions in A0).
 - 1 third-party Starlette/httpx test warning (needs `httpx2`, out of our control).
+
+## A0 closed — 2026-07-01
+A0 is closed here. Beyond the original scope, the app also gained (verified on a real
+Pixel 3 + tests/analyze green):
+- **YouTube playback fix** on Android (upgraded `youtube_player_iframe` 5.2.2→6.0.2; the
+  old "video unavailable 152-4" is gone).
+- **Local-first data flow**: server (fast timeout) → on-device store (`shared_preferences`)
+  → "Sinh hợp âm" generates + saves a placeholder. Works offline; no localhost dependency.
+- **Transpose** (−12…+12) with key-aware spelling (line of fifths: correct #/b per key).
+- **Guitar diagrams** now driven by the bundled `@tombatossals/chords-db` dataset
+  (`assets/data/guitar.json`): every key×suffix, baseFret-aware rendering, partial barres,
+  fret numbers, multiple positions. Replaces the earlier 8-chord hand table.
+- **Player UX**: detail screen (back button, no dead bottom nav), key/BPM + transpose header,
+  square video, scrollable tabs, deferred WebView init (no transition jank), instant theme
+  switching (explicit text colours).
+
+Further optimization/features (real on-device analysis = A1, piano black-key completeness,
+guitar `baseFret`/position polish, sync, recents UI) are tracked as separate plans/issues.

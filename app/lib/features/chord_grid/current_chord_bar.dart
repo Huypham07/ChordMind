@@ -8,15 +8,21 @@ class CurrentChordBar extends StatelessWidget {
   final AnalysisResult result;
   final double positionSeconds;
   final int semitones;
+  final String songKey;
   const CurrentChordBar(
-      {super.key, required this.result, required this.positionSeconds, this.semitones = 0});
+      {super.key,
+      required this.result,
+      required this.positionSeconds,
+      this.semitones = 0,
+      this.songKey = 'C major'});
   @override
   Widget build(BuildContext context) {
     final i = activeChordIndex(result, positionSeconds);
     final cells = result.synchronizedChords;
-    final current = i >= 0 ? transposeChord(cells[i].chord, semitones) : '—';
-    final next =
-        (i >= 0 && i + 1 < cells.length) ? transposeChord(cells[i + 1].chord, semitones) : null;
+    final current = i >= 0 ? transposeChord(cells[i].chord, semitones, key: songKey) : '—';
+    final next = (i >= 0 && i + 1 < cells.length)
+        ? transposeChord(cells[i + 1].chord, semitones, key: songKey)
+        : null;
     return Container(
       padding: const EdgeInsets.all(AppSpace.s16),
       decoration: BoxDecoration(gradient: AppGradients.brand, borderRadius: BorderRadius.circular(AppRadii.lg)),
