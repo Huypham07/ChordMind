@@ -13,7 +13,10 @@ class PillTabs extends StatelessWidget {
     return Container(
       padding: const EdgeInsets.all(AppSpace.s4),
       decoration: BoxDecoration(color: cm.surfaceAlt, borderRadius: BorderRadius.circular(AppRadii.pill)),
-      child: Row(mainAxisSize: MainAxisSize.min, children: [
+      // Bar stays within its parent's width; the tabs scroll inside it.
+      child: SingleChildScrollView(
+        scrollDirection: Axis.horizontal,
+        child: Row(mainAxisSize: MainAxisSize.min, children: [
         for (var i = 0; i < tabs.length; i++)
           GestureDetector(
             onTap: () => onChanged(i),
@@ -30,7 +33,8 @@ class PillTabs extends StatelessWidget {
                       fontWeight: FontWeight.w600, fontSize: 13)),
             ),
           ),
-      ]),
+        ]),
+      ),
     );
   }
 }

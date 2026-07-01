@@ -1,6 +1,7 @@
 import 'package:flutter/material.dart';
 import 'package:chordmind/core/models.dart';
 import 'package:chordmind/core/theme.dart';
+import 'package:chordmind/core/transpose.dart';
 import 'grid_sync.dart';
 
 /// ChordMiniApp-style grid: fixed per-beat cells grouped into measures, chords
@@ -8,11 +9,13 @@ import 'grid_sync.dart';
 class ChordGrid extends StatelessWidget {
   final AnalysisResult result;
   final double positionSeconds;
+  final int semitones;
   final void Function(String chord)? onTapChord;
   const ChordGrid({
     super.key,
     required this.result,
     required this.positionSeconds,
+    this.semitones = 0,
     this.onTapChord,
   });
 
@@ -36,7 +39,9 @@ class ChordGrid extends StatelessWidget {
     // chord label at each chord-start beat + the chord in effect on every beat
     final labelAt = <int, String>{};
     for (final sc in result.synchronizedChords) {
-      if (sc.beatIndex >= 0 && sc.beatIndex < beats.length) labelAt[sc.beatIndex] = sc.chord;
+      if (sc.beatIndex >= 0 && sc.beatIndex < beats.length) {
+        labelAt[sc.beatIndex] = transposeChord(sc.chord, semitones);
+      }
     }
     final chordPerBeat = List<String?>.filled(beats.length, null);
     String? cur;

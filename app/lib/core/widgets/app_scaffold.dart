@@ -20,6 +20,10 @@ class AppScaffold extends StatelessWidget {
   final int navIndex;
   final ValueChanged<int>? onNav;
   final List<Widget>? actions;
+
+  /// Detail screens (e.g. the player, reached via push) set this false to drop
+  /// the bottom nav and rely on the AppBar back button instead.
+  final bool showNav;
   const AppScaffold({
     super.key,
     required this.title,
@@ -28,6 +32,7 @@ class AppScaffold extends StatelessWidget {
     this.navIndex = 0,
     this.onNav,
     this.actions,
+    this.showNav = true,
   });
 
   @override
@@ -42,7 +47,7 @@ class AppScaffold extends StatelessWidget {
 
     if (ff == FormFactor.compact) {
       return Scaffold(
-        extendBody: true,
+        extendBody: showNav,
         appBar: AppBar(
           title: Row(
             mainAxisSize: MainAxisSize.min,
@@ -58,7 +63,7 @@ class AppScaffold extends StatelessWidget {
           scrolledUnderElevation: 0,
         ),
         body: SafeArea(bottom: false, child: body),
-        bottomNavigationBar: _MusicBottomNav(index: navIndex, onTap: onNav),
+        bottomNavigationBar: showNav ? _MusicBottomNav(index: navIndex, onTap: onNav) : null,
       );
     }
 

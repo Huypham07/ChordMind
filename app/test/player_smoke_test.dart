@@ -12,9 +12,7 @@ class _FakeRepo implements SongRepository {
   @override
   Future<AnalysisResult> get(String id) async => sampleAnalysis;
   @override
-  Future<AnalysisResult> submit(String url) async => sampleAnalysis;
-  @override
-  Future<List<({String youtubeId, String title})>> recent() async => [];
+  Future<AnalysisResult> generate(String id, {String? title}) async => sampleAnalysis;
 }
 
 void main() {

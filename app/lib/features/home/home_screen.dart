@@ -36,7 +36,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       );
       return;
     }
-    context.go('/player/$id');
+    context.push('/player/$id');
   }
 
   @override

@@ -24,4 +24,9 @@ class ChordMindApi {
   }
 }
 
-final apiProvider = Provider((_) => ChordMindApi(Dio()));
+// Short timeouts so an offline/unreachable server fails fast and we fall back
+// to the on-device store instead of hanging.
+final apiProvider = Provider((_) => ChordMindApi(Dio(BaseOptions(
+      connectTimeout: const Duration(milliseconds: 1500),
+      receiveTimeout: const Duration(milliseconds: 1500),
+    ))));

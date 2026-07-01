@@ -32,6 +32,14 @@ void showChordDiagram(BuildContext context, String chord) {
   showModalBottomSheet(
     context: context,
     showDragHandle: true,
-    builder: (_) => ChordDiagramView(chord: chord),
+    // Scrollable + safe-area padded so tall diagrams never bottom-overflow on
+    // small screens.
+    isScrollControlled: true,
+    builder: (ctx) => SafeArea(
+      child: SingleChildScrollView(
+        padding: EdgeInsets.only(bottom: MediaQuery.viewInsetsOf(ctx).bottom),
+        child: ChordDiagramView(chord: chord),
+      ),
+    ),
   );
 }
