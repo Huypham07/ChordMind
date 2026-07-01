@@ -2,7 +2,7 @@
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
-import 'package:chordmind/core/song_repository.dart';
+import 'package:chordmind/core/youtube.dart';
 import 'package:chordmind/core/theme.dart';
 import 'package:chordmind/core/breakpoints.dart';
 import 'package:chordmind/core/widgets/app_scaffold.dart';
@@ -19,7 +19,6 @@ class HomeScreen extends ConsumerStatefulWidget {
 
 class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _ctrl = TextEditingController();
-  bool _busy = false;
 
   @override
   void dispose() {
@@ -27,21 +26,17 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     super.dispose();
   }
 
-  Future<void> _analyze() async {
-    if (_ctrl.text.trim().isEmpty) return;
-    setState(() => _busy = true);
-    try {
-      final r = await ref.read(songRepositoryProvider).submit(_ctrl.text.trim());
-      if (mounted) context.go('/player/${r.source.youtubeId}');
-    } catch (_) {
-      if (mounted) {
-        ScaffoldMessenger.of(context).showSnackBar(
-          const SnackBar(content: Text('Không phân tích được link. Kiểm tra URL YouTube.')),
-        );
-      }
-    } finally {
-      if (mounted) setState(() => _busy = false);
+  // The app extracts the id itself and opens the player (video plays with no
+  // backend); chord analysis is fetched/computed on the player screen.
+  void _analyze() {
+    final id = parseYoutubeId(_ctrl.text);
+    if (id == null) {
+      ScaffoldMessenger.of(context).showSnackBar(
+        const SnackBar(content: Text('Link YouTube không hợp lệ')),
+      );
+      return;
     }
+    context.go('/player/$id');
   }
 
   @override
@@ -58,7 +53,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
           Row(children: [
             Expanded(child: SearchPill(controller: _ctrl, onSubmit: _analyze)),
             const SizedBox(width: AppSpace.s12),
-            GradientButton(label: 'Analyze', busy: _busy, onPressed: _busy ? null : _analyze),
+            GradientButton(label: 'Analyze', onPressed: _analyze),
           ]),
           const SizedBox(height: AppSpace.s32),
           Text('Gần đây', style: Theme.of(context).textTheme.titleLarge),
