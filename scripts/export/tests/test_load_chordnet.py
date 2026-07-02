@@ -1,5 +1,4 @@
 import pytest
-from pathlib import Path
 from scripts.export.load_chordnet import load_chordnet
 from scripts.export.config import REFERENCE_ROOT, FEATURE
 
