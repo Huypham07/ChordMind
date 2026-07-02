@@ -10,3 +10,4 @@ pgdata/
 *.egg-info/
 .DS_Store
 Google_Sans/
+artifacts/

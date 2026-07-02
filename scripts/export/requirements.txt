@@ -1,0 +1,8 @@
+torch>=2.2
+nnAudio>=0.3.2
+onnx>=1.16
+onnxruntime>=1.18
+librosa>=0.10
+numpy>=1.26
+pytest>=8
+pyyaml>=6
