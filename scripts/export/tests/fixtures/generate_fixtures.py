@@ -49,6 +49,26 @@ def make_triad(t: np.ndarray) -> np.ndarray:
     return 0.2 * signal
 
 
+def make_extended_c9(t: np.ndarray) -> np.ndarray:
+    # Harmonically rich C9 chord (root C, major 3rd E, 5th G, minor 7th Bb,
+    # 9th D): C3/E3/G3/Bb3/D4 (130.81/164.81/196.00/233.08/293.66 Hz), each
+    # with 5 harmonics at amplitude 1/h, plus light fixed-seed (1) Gaussian
+    # noise, normalized -- same recipe as make_triad, but including the
+    # flat-7th and 9th scale degrees so the chord-cnn-lstm net's 7th/9th
+    # decomposition heads (which predict "none" on a plain triad) also
+    # activate on this fixture.
+    fundamentals = (130.81, 164.81, 196.00, 233.08, 293.66)  # C3 E3 G3 Bb3 D4
+    n_harmonics = 5
+    tone = np.zeros_like(t)
+    for f0 in fundamentals:
+        for h in range(1, n_harmonics + 1):
+            tone += (1.0 / h) * np.sin(2 * np.pi * f0 * h * t)
+    noise = 0.02 * np.random.RandomState(1).randn(t.shape[0])
+    signal = tone + noise
+    signal = signal / np.max(np.abs(signal))
+    return 0.2 * signal
+
+
 def make_noise(n_samples: int) -> np.ndarray:
     rng = np.random.default_rng(seed=42)
     return 0.05 * rng.standard_normal(n_samples)
@@ -67,6 +87,7 @@ def main() -> None:
     t = np.arange(n_samples) / SR
 
     _write("triad_cmaj.wav", make_triad(t))
+    _write("extended_c9.wav", make_extended_c9(t))
     _write("white_noise.wav", make_noise(n_samples))
     _write("sweep_100_2000hz.wav", make_sweep(t))
 

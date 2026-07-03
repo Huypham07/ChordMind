@@ -27,6 +27,16 @@ non-aligned windows and producing a spurious parity failure.
   even though the shared CQT frontend/wrapper was correct (ChordNet stayed
   at argmax_agreement=1.0 on the same audio). The richer harmonic content
   removes that spurious divergence for both models.
+- `extended_c9.wav` — sustained, harmonically rich C9 chord (root, major
+  3rd, 5th, minor 7th, 9th): C3/E3/G3/Bb3/D4 fundamentals
+  (130.81/164.81/196.00/233.08/293.66 Hz), each with 5 harmonics at
+  amplitude 1/h, plus light fixed-seed (1) Gaussian noise, normalized.
+  Used by `scripts/export/tests/test_ccl_frontend.py`: a plain triad
+  (`triad_cmaj.wav`) correctly predicts "none" on chord-cnn-lstm's
+  7th/9th/11th/13th decomposition heads, so it doesn't exercise them.
+  This fixture's flat-7th and 9th scale degrees drive those heads to
+  non-"none" argmax classes, so the frontend/parity tests actually cover
+  all 6 heads, not just triad/bass.
 - `white_noise.wav` — low-amplitude Gaussian white noise, fixed seed (42).
 - `sweep_100_2000hz.wav` — linear frequency sweep, 100 Hz to 2000 Hz.
 
