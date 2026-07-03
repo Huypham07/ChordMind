@@ -43,6 +43,15 @@ cd app && flutter pub get && flutter run -d chrome
 
 Chi tiết từng phần: `server/README.md`, `app/README.md`.
 
+## Model export (base pipeline)
+
+Convert reference chord checkpoints to on-device ONNX:
+
+```bash
+pip install -r scripts/export/requirements.txt
+python -m scripts.export chordnet_2e1d   # -> artifacts/onnx/{chordnet_2e1d.onnx,manifest.json}
+```
+
 ## Trạng thái
 
 - **A0 (xong):** nhập YouTube → hiển thị chord grid + thế bấm + theme. Model hiện là **stub** (làm app trước, model sau).
