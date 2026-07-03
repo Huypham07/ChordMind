@@ -36,7 +36,16 @@ class ChordNetBundle:
     idx_to_chord: dict
 
 
-def load_chordnet(ckpt_path: Path) -> ChordNetBundle:
+def load_bundle(ckpt_path: Path, model_type: str) -> ChordNetBundle:
+    """Load any reference model (`'ChordNet'`, `'BTC'`, ...) via the
+    reference's own production loading entry point. `model_type` is the
+    only thing that differs between ChordNet and BTC loading -- both share
+    the same config file, checkpoint norm-stat/vocab extraction, and
+    `load_model` dispatch (see `load_model` in
+    reference/ChordMini/src/models/common/checkpoint_loading.py:100, which
+    branches on `model_type == 'BTC'` to build `BTC_model(config=config.model)`
+    instead of `ChordNet(**architecture)`).
+    """
     ckpt_path = Path(ckpt_path)
     if not ckpt_path.exists():
         raise FileNotFoundError(f"Checkpoint not found or unreadable: {ckpt_path}")
@@ -49,13 +58,12 @@ def load_chordnet(ckpt_path: Path) -> ChordNetBundle:
     idx_to_chord, _ = extract_vocab(str(ckpt_path))
 
     # Mirrors test_labeled_audio.py:273 --
-    # `model, _, _ = load_model(args.checkpoint, args.model_type, config, device, args)`
-    # with model_type='ChordNet' for the 2E1D checkpoint. `load_model` itself
-    # infers the architecture from the state dict/config and performs the
-    # state-dict load (falling back to strict=False only if a strict load
-    # fails), so we trust its production load path rather than duplicating
-    # the strict-check here.
-    model, _, _ = load_model(str(ckpt_path), "ChordNet", config, "cpu", None)
+    # `model, _, _ = load_model(args.checkpoint, args.model_type, config, device, args)`.
+    # `load_model` itself infers the architecture from the state dict/config
+    # and performs the state-dict load (falling back to strict=False only if
+    # a strict load fails), so we trust its production load path rather than
+    # duplicating the strict-check here.
+    model, _, _ = load_model(str(ckpt_path), model_type, config, "cpu", None)
 
     model.eval()
     return ChordNetBundle(
@@ -64,3 +72,11 @@ def load_chordnet(ckpt_path: Path) -> ChordNetBundle:
         std=float(std),
         idx_to_chord=idx_to_chord,
     )
+
+
+def load_chordnet(ckpt_path: Path) -> ChordNetBundle:
+    return load_bundle(ckpt_path, "ChordNet")
+
+
+def load_btc(ckpt_path: Path) -> ChordNetBundle:
+    return load_bundle(ckpt_path, "BTC")

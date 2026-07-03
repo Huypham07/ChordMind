@@ -23,7 +23,7 @@ import onnxruntime as ort
 import torch
 
 from scripts.export.config import FEATURE, REFERENCE_ROOT
-from scripts.export.load_chordnet import load_chordnet
+from scripts.export.load_chordnet import load_bundle
 
 sys.path.insert(0, str(REFERENCE_ROOT))
 
@@ -46,8 +46,8 @@ def _first_window_logits_onnx(onnx_path, pcm: np.ndarray) -> np.ndarray:
     return logits
 
 
-def _first_window_logits_ref(ckpt_path, wav) -> np.ndarray:
-    bundle = load_chordnet(ckpt_path)
+def _first_window_logits_ref(ckpt_path, wav, model_type="ChordNet") -> np.ndarray:
+    bundle = load_bundle(ckpt_path, model_type)
     feats, _ = extract_song_features(str(wav), _ref_config())  # [frames, 144], NOT normalized
     win = feats[: FEATURE.seq_len]
     win = (win - bundle.mean) / bundle.std  # match ONNX frontend's normalization
@@ -58,22 +58,22 @@ def _first_window_logits_ref(ckpt_path, wav) -> np.ndarray:
     return logits[0].numpy()
 
 
-def _paired_logits(onnx_path, ckpt_path, wav):
+def _paired_logits(onnx_path, ckpt_path, wav, model_type="ChordNet"):
     pcm, _ = librosa.load(str(wav), sr=FEATURE.sample_rate, mono=True)
     a = _first_window_logits_onnx(onnx_path, pcm)
-    b = _first_window_logits_ref(ckpt_path, wav)
+    b = _first_window_logits_ref(ckpt_path, wav, model_type)
     m = min(len(a), len(b))
     return a[:m], b[:m]
 
 
-def max_logit_diff(onnx_path, ckpt_path, wav) -> float:
-    a, b = _paired_logits(onnx_path, ckpt_path, wav)
+def max_logit_diff(onnx_path, ckpt_path, wav, model_type="ChordNet") -> float:
+    a, b = _paired_logits(onnx_path, ckpt_path, wav, model_type)
     return float(np.max(np.abs(a - b)))
 
 
-def argmax_agreement(onnx_path, ckpt_path, wav) -> float:
+def argmax_agreement(onnx_path, ckpt_path, wav, model_type="ChordNet") -> float:
     """Fraction of frames where ONNX and reference predict the same chord
     index -- the metric that actually matters for a classifier."""
-    a, b = _paired_logits(onnx_path, ckpt_path, wav)
+    a, b = _paired_logits(onnx_path, ckpt_path, wav, model_type)
     agree = np.argmax(a, axis=-1) == np.argmax(b, axis=-1)
     return float(np.mean(agree))

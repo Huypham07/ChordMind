@@ -2,7 +2,7 @@ import hashlib
 import json
 from pathlib import Path
 from scripts.export.config import FEATURE
-from scripts.export.load_chordnet import load_chordnet
+from scripts.export.load_chordnet import load_bundle
 
 
 def _sha256(p: Path) -> str:
@@ -10,9 +10,10 @@ def _sha256(p: Path) -> str:
 
 
 def write_manifest_entry(
-    onnx_path, ckpt_path, *, name, step, decode, manifest_path, version="1"
+    onnx_path, ckpt_path, *, name, step, decode, manifest_path, version="1",
+    model_type="ChordNet",
 ) -> dict:
-    b = load_chordnet(Path(ckpt_path))
+    b = load_bundle(Path(ckpt_path), model_type)
     labels = [b.idx_to_chord[i] for i in range(len(b.idx_to_chord))]
     entry = {
         "name": name,

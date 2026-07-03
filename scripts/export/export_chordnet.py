@@ -1,14 +1,16 @@
 from pathlib import Path
 import torch
 from scripts.export.cqt_frontend import CQTFrontend
-from scripts.export.load_chordnet import load_chordnet
+from scripts.export.load_chordnet import load_bundle
 from scripts.export.config import FEATURE
 
 
 class WrappedChordNet(torch.nn.Module):
-    """PCM in, chord-logits out: front-end CQT + ChordNet, single fixed
-    108-frame window (ChordNet's transformer positional encoding is fixed
-    to seq_len, so this is not a variable-length model)."""
+    """PCM in, chord-logits out: front-end CQT + model, single fixed
+    108-frame window (both ChordNet's and BTC's positional encodings are
+    fixed to seq_len, so neither is a variable-length model). Model-agnostic
+    despite the name: `forward` already handles both a `(logits, features)`
+    tuple (ChordNet) and a bare logits tensor (BTC)."""
 
     def __init__(self, frontend, model):
         super().__init__()
@@ -17,12 +19,12 @@ class WrappedChordNet(torch.nn.Module):
 
     def forward(self, pcm):
         feat = self.frontend(pcm)  # [1, 108, 144]
-        out = self.model(feat)  # (logits, features)
+        out = self.model(feat)  # (logits, features) for ChordNet, logits for BTC
         return out[0] if isinstance(out, tuple) else out
 
 
-def export_chordnet(ckpt_path: Path, out_path: Path) -> Path:
-    b = load_chordnet(ckpt_path)
+def export_model(ckpt_path: Path, out_path: Path, model_type: str) -> Path:
+    b = load_bundle(ckpt_path, model_type)
     wrapped = WrappedChordNet(CQTFrontend(b.mean, b.std), b.model).eval()
 
     # NOTE: with center=True CQT framing (librosa/nnAudio default), N PCM
@@ -43,3 +45,11 @@ def export_chordnet(ckpt_path: Path, out_path: Path) -> Path:
         opset_version=17,
     )
     return out_path
+
+
+def export_chordnet(ckpt_path: Path, out_path: Path) -> Path:
+    return export_model(ckpt_path, out_path, "ChordNet")
+
+
+def export_btc(ckpt_path: Path, out_path: Path) -> Path:
+    return export_model(ckpt_path, out_path, "BTC")
