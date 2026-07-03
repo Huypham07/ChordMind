@@ -9,3 +9,6 @@ seaborn>=0.13
 numpy>=1.26
 pytest>=8
 pyyaml>=6
+pretty_midi>=0.2.11
+pydub>=0.25
+h5py>=3.14
