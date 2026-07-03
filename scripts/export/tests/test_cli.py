@@ -15,15 +15,6 @@ def test_cli_produces_artifacts():
 
 
 @pytest.mark.skipif(not BTC_CKPT.exists(), reason="checkpoint absent")
-@pytest.mark.xfail(
-    strict=True,
-    reason=(
-        "KNOWN GATE FAILURE (see task-8a-report.md): the CLI's parity gate "
-        "correctly refuses to write btc.onnx/manifest entry because "
-        "argmax_agreement on triad_cmaj.wav is 0.389, not 1.0. See "
-        "test_parity_btc.py for the isolated repro/diagnosis."
-    ),
-)
 def test_cli_produces_btc_artifacts():
     r = subprocess.run([sys.executable, "-m", "scripts.export", "btc"],
                        cwd=Path(__file__).resolve().parents[3], capture_output=True, text=True)

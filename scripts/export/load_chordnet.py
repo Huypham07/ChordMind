@@ -22,7 +22,7 @@ import sys
 sys.path.insert(0, str(REFERENCE_ROOT))
 
 from src.models import load_model  # noqa: E402
-from src.utils import HParams  # noqa: E402
+from src.utils import HParams, extract_model_state_dict  # noqa: E402
 from src.evaluation.utils.common import extract_norm_stats, extract_vocab  # noqa: E402
 
 CONFIG_PATH = REFERENCE_ROOT / "config" / "ChordMini.yaml"
@@ -64,6 +64,25 @@ def load_bundle(ckpt_path: Path, model_type: str) -> ChordNetBundle:
     # a strict load fails), so we trust its production load path rather than
     # duplicating the strict-check here.
     model, _, _ = load_model(str(ckpt_path), model_type, config, "cpu", None)
+
+    # Clean-load guard: `load_model` silently falls back to strict=False on
+    # a failed strict load, which could half-load a mismatched checkpoint/
+    # model_type combination without ever raising. Re-derive the checkpoint's
+    # state-dict keys the same way the reference does (`extract_model_state_dict`)
+    # and verify the built model's keys match exactly, so a bad load fails
+    # loudly here instead of silently producing a garbage-weight model.
+    checkpoint = torch.load(str(ckpt_path), map_location="cpu", weights_only=False)
+    ckpt_keys = set(extract_model_state_dict(checkpoint).keys())
+    model_keys = set(model.state_dict().keys())
+    missing = ckpt_keys - model_keys
+    unexpected = model_keys - ckpt_keys
+    if missing or unexpected:
+        raise RuntimeError(
+            f"Clean-load guard failed for model_type={model_type!r} loading "
+            f"{ckpt_path}: {len(missing)} checkpoint keys missing from the "
+            f"built model, {len(unexpected)} model keys not in the checkpoint. "
+            f"missing={sorted(missing)} unexpected={sorted(unexpected)}"
+        )
 
     model.eval()
     return ChordNetBundle(

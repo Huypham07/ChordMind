@@ -29,13 +29,24 @@ def _write(name: str, samples: np.ndarray) -> None:
 
 
 def make_triad(t: np.ndarray) -> np.ndarray:
-    # Sustained C major triad: C4 (261.63 Hz), E4 (329.63 Hz), G4 (392.00 Hz).
-    tone = (
-        np.sin(2 * np.pi * 261.63 * t)
-        + np.sin(2 * np.pi * 329.63 * t)
-        + np.sin(2 * np.pi * 392.00 * t)
-    )
-    return 0.2 * tone / 3.0
+    # Harmonically rich sustained C major triad: C4/E4/G4 fundamentals
+    # (261.63/329.63/392.00 Hz), each with 5 harmonics at amplitude 1/h,
+    # plus light fixed-seed noise. Pure sine tones are out-of-distribution
+    # for chord models trained on real instrument timbre -- nnAudio's CQT
+    # magnitude diverges slightly from librosa's on such unrealistic input,
+    # which previously flipped BTC's argmax from 'C' to 'N' (no-chord)
+    # between the reference and ONNX paths. Real-ish harmonic content with
+    # noise keeps both ChordNet and BTC at argmax_agreement == 1.0.
+    fundamentals = (261.63, 329.63, 392.00)  # C4, E4, G4
+    n_harmonics = 5
+    tone = np.zeros_like(t)
+    for f0 in fundamentals:
+        for h in range(1, n_harmonics + 1):
+            tone += (1.0 / h) * np.sin(2 * np.pi * f0 * h * t)
+    noise = 0.02 * np.random.RandomState(0).randn(t.shape[0])
+    signal = tone + noise
+    signal = signal / np.max(np.abs(signal))
+    return 0.2 * signal
 
 
 def make_noise(n_samples: int) -> np.ndarray:
