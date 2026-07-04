@@ -44,6 +44,7 @@ dependencies:
   ffmpeg_kit_flutter_new: ^4.3.2
   path: ^1.9.1
   path_provider: ^2.1.6
+  crypto: ^3.0.3
 
 dev_dependencies:
   flutter_test:
@@ -81,6 +82,9 @@ flutter:
   assets:
     - assets/images/
     - assets/data/guitar.json  # @tombatossals/chords-db guitar voicings (MIT)
+    # manifest.json is committed; the .onnx models are gitignored and
+    # synced locally for dev/CI builds via tool/sync_models.sh (Plan B B1.1).
+    - assets/models/
 
   # Google Sans (SIL Open Font License 1.1 — see assets/fonts/GoogleSans-OFL.txt)
   fonts:

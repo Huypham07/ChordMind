@@ -43,3 +43,8 @@ app.*.map.json
 /android/app/debug
 /android/app/profile
 /android/app/release
+
+# Bundled ONNX chord models (47MB/51MB/1.9MB) — synced locally via
+# tool/sync_models.sh from artifacts/onnx/, never committed. manifest.json
+# in the same directory IS committed (small, drives the model registry).
+/assets/models/*.onnx
