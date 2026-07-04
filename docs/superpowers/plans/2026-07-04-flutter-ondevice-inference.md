@@ -2,6 +2,24 @@
 
 > **For agentic workers:** REQUIRED SUB-SKILL: Use superpowers:subagent-driven-development to implement task-by-task. Steps use checkbox (`- [ ]`).
 
+## Status — 2026-07-04
+
+**Phase 0 spikes ✅** B0.1 onnxruntime runs our ONNX on host (chordnet 3.8e-6, ccl bit-identical); B0.2 YouTube→PCM proven; B0.3 native hybrid_cqt feasible but incomplete (triad ok, extended-chord heads 0.85–0.89 — tracked follow-up, ccl on-device deferred).
+
+**Phase 1 ✅ (chordnet_2e1d + btc + key)** — on-device analysis is live and **verified running on a real Android device** (Pixel 3). `SongRepository.generate` runs the on-device pipeline; each B1.1–B1.5 task was reviewed.
+
+**Delivered beyond the original Phase-1 plan (interactive iteration):**
+- **Two entry points on Home:** a YouTube link *or* a local **mp3** (shown on Home before Analyze).
+- **File-mode player:** plays a local audio file via **just_audio** and syncs the chord view to its position; analysis is manual (`Sinh hợp âm` / re-analyze), same as YouTube. `AudioSource.pcmFromFile` + an `audioFilePath` path through analyzer→repository feed the same pipeline (also the documented fallback for YouTube rate-limiting, which was hit on-device).
+- **Settings screen** with a chord-model picker (chordnet_2e1d / btc; chord_cnn_lstm shown "coming soon").
+- **Android build fix:** `compileSdk 36` (+ per-subproject override for the `:onnxruntime` AAR pinned to 33), `minSdk 24`.
+- **Chord display overhaul (replaces the A0 beat grid):** a **time-based `ChordTimeline`** driven by the model's real chord start/end times, highlighting the current chord by real playback position — chords sync to audio **without a beat model**. Short abbreviated labels (`A:min7`→`Am7`); `N`/no-chord and `X` hidden; per-change (not per-beat) segments.
+- Cache prefix bumped to invalidate pre-model demo data; analyze errors surfaced in-UI + `[analyze]` stage logs.
+
+**Known limitations / follow-ups:** no beat/meter model → the 4/4 measure grid was **dropped** in favor of the time-based timeline (real downbeats need a beat model, e.g. Beat-Transformer, a future plan); `bpm`/`timeSignature` in `AnalysisResult` remain placeholders. chord_cnn_lstm on-device blocked on finishing native hybrid_cqt (B0.3). Phase 3 (manifest-download instead of bundled models) not started. A few `RadioListTile` deprecation infos in the settings screen.
+
+---
+
 **Goal:** Make `SongRepository.generate(youtubeId)` run the real on-device analysis in Flutter — YouTube audio → PCM → ONNX chord inference → decoded chords + key → `AnalysisResult` JSON → cached → rendered in the existing grid. Covers all 3 exported chord models (chordnet_2e1d default, btc, chord_cnn_lstm).
 
 **Architecture:** Replace the `generateSampleJson` stub behind `DefaultSongRepository.generate` (`app/lib/core/song_repository.dart:38`) with an `OnDeviceAnalyzer`. Models run via the `onnxruntime` Flutter package. chordnet/btc are PCM-in (CQT baked, Dart feeds PCM); chord_cnn_lstm is feature-in (Dart computes `hybrid_cqt` natively, feeds the 288-bin feature). Decode (vote / XHMM), Krumhansl key, and frame→time mapping are ported to Dart. Output is the unchanged `AnalysisResult` schema (`app/lib/core/models.dart`).
