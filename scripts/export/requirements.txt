@@ -1,0 +1,14 @@
+torch>=2.2
+nnAudio>=0.3.2
+onnx>=1.16
+onnxruntime>=1.18
+librosa>=0.10
+mir_eval>=0.7
+matplotlib>=3.7
+seaborn>=0.13
+numpy>=1.26
+pytest>=8
+pyyaml>=6
+pretty_midi>=0.2.11
+pydub>=0.25
+h5py>=3.14

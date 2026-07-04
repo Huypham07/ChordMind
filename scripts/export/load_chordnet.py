@@ -1,0 +1,101 @@
+"""Load the reference ChordNet 2E1D checkpoint (model + norm stats + vocab).
+
+Wires the real reference helpers from `reference/ChordMini/src` rather than
+reimplementing checkpoint parsing or architecture guessing. The model itself
+is constructed via the reference's own production loading entry point,
+`src.models.load_model(...)`, mirroring how
+`reference/ChordMini/src/evaluation/test_labeled_audio.py` loads a checkpoint
+for evaluation (see its `load_model(args.checkpoint, args.model_type,
+config, device, args)` call). This means we inherit the reference's own
+architecture inference (`_infer_chordnet`) and any config-driven overrides,
+rather than duplicating that logic here with a partial reimplementation.
+"""
+from dataclasses import dataclass
+from pathlib import Path
+
+import torch
+
+from scripts.export.config import REFERENCE_ROOT
+
+import sys
+
+sys.path.insert(0, str(REFERENCE_ROOT))
+
+from src.models import load_model  # noqa: E402
+from src.utils import HParams, extract_model_state_dict  # noqa: E402
+from src.evaluation.utils.common import extract_norm_stats, extract_vocab  # noqa: E402
+
+CONFIG_PATH = REFERENCE_ROOT / "config" / "ChordMini.yaml"
+
+
+@dataclass
+class ChordNetBundle:
+    model: torch.nn.Module
+    mean: float
+    std: float
+    idx_to_chord: dict
+
+
+def load_bundle(ckpt_path: Path, model_type: str) -> ChordNetBundle:
+    """Load any reference model (`'ChordNet'`, `'BTC'`, ...) via the
+    reference's own production loading entry point. `model_type` is the
+    only thing that differs between ChordNet and BTC loading -- both share
+    the same config file, checkpoint norm-stat/vocab extraction, and
+    `load_model` dispatch (see `load_model` in
+    reference/ChordMini/src/models/common/checkpoint_loading.py:100, which
+    branches on `model_type == 'BTC'` to build `BTC_model(config=config.model)`
+    instead of `ChordNet(**architecture)`).
+    """
+    ckpt_path = Path(ckpt_path)
+    if not ckpt_path.exists():
+        raise FileNotFoundError(f"Checkpoint not found or unreadable: {ckpt_path}")
+
+    # Same config source and load path as test_labeled_audio.py's
+    # `config = HParams.load(args.config)`.
+    config = HParams.load(str(CONFIG_PATH))
+
+    mean, std = extract_norm_stats(str(ckpt_path))
+    idx_to_chord, _ = extract_vocab(str(ckpt_path))
+
+    # Mirrors test_labeled_audio.py:273 --
+    # `model, _, _ = load_model(args.checkpoint, args.model_type, config, device, args)`.
+    # `load_model` itself infers the architecture from the state dict/config
+    # and performs the state-dict load (falling back to strict=False only if
+    # a strict load fails), so we trust its production load path rather than
+    # duplicating the strict-check here.
+    model, _, _ = load_model(str(ckpt_path), model_type, config, "cpu", None)
+
+    # Clean-load guard: `load_model` silently falls back to strict=False on
+    # a failed strict load, which could half-load a mismatched checkpoint/
+    # model_type combination without ever raising. Re-derive the checkpoint's
+    # state-dict keys the same way the reference does (`extract_model_state_dict`)
+    # and verify the built model's keys match exactly, so a bad load fails
+    # loudly here instead of silently producing a garbage-weight model.
+    checkpoint = torch.load(str(ckpt_path), map_location="cpu", weights_only=False)
+    ckpt_keys = set(extract_model_state_dict(checkpoint).keys())
+    model_keys = set(model.state_dict().keys())
+    missing = ckpt_keys - model_keys
+    unexpected = model_keys - ckpt_keys
+    if missing or unexpected:
+        raise RuntimeError(
+            f"Clean-load guard failed for model_type={model_type!r} loading "
+            f"{ckpt_path}: {len(missing)} checkpoint keys missing from the "
+            f"built model, {len(unexpected)} model keys not in the checkpoint. "
+            f"missing={sorted(missing)} unexpected={sorted(unexpected)}"
+        )
+
+    model.eval()
+    return ChordNetBundle(
+        model=model,
+        mean=float(mean),
+        std=float(std),
+        idx_to_chord=idx_to_chord,
+    )
+
+
+def load_chordnet(ckpt_path: Path) -> ChordNetBundle:
+    return load_bundle(ckpt_path, "ChordNet")
+
+
+def load_btc(ckpt_path: Path) -> ChordNetBundle:
+    return load_bundle(ckpt_path, "BTC")

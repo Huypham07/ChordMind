@@ -1,8 +1,11 @@
 // app/lib/features/player/player_screen.dart
 import 'dart:async';
+import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
-import 'package:youtube_player_iframe/youtube_player_iframe.dart';
+import 'package:just_audio/just_audio.dart';
+import 'package:path/path.dart' as p;
+import 'package:youtube_player_iframe/youtube_player_iframe.dart' hide PlayerState;
 import 'package:chordmind/core/models.dart';
 import 'package:chordmind/core/song_repository.dart';
 import 'package:chordmind/core/theme.dart';
@@ -12,20 +15,26 @@ import 'package:chordmind/core/widgets/gradient_button.dart';
 import 'package:chordmind/core/widgets/info_chip.dart';
 import 'package:chordmind/core/widgets/pill_tabs.dart';
 import 'package:chordmind/core/widgets/empty_state.dart';
-import 'package:chordmind/features/chord_grid/chord_grid.dart';
+import 'package:chordmind/features/chord_grid/chord_timeline.dart';
 import 'package:chordmind/features/chord_grid/current_chord_bar.dart';
 import 'package:chordmind/features/diagrams/chord_diagram_sheet.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   final String youtubeId;
-  const PlayerScreen(this.youtubeId, {super.key});
+
+  /// When set, the player runs in "file mode": it plays this local audio file
+  /// (via just_audio) instead of the YouTube video, and analyzes the file.
+  final String? audioFilePath;
+  const PlayerScreen(this.youtubeId, {super.key, this.audioFilePath});
   @override
   ConsumerState<PlayerScreen> createState() => _PlayerScreenState();
 }
 
 class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   YoutubePlayerController? _yt;
+  AudioPlayer? _audio;
   StreamSubscription? _sub;
+  bool get _fileMode => widget.audioFilePath != null;
   AnalysisResult? _r;
   bool _analysisFailed = false;
   bool _generating = false;
@@ -42,11 +51,30 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   @override
   void initState() {
     super.initState();
-    _loadAnalysis();
-    // The WebView is a heavy platform view; creating it in initState janks the
-    // push transition ("khựng 1 nhịp"). Defer it until the slide-in finishes —
-    // the video slot shows a placeholder until then, so the transition stays smooth.
-    WidgetsBinding.instance.addPostFrameCallback((_) => _initPlayerWhenSettled());
+    if (_fileMode) {
+      _initFilePlayer();
+      _loadAnalysis(); // like YouTube: don't auto-analyze; user taps "Sinh hợp âm"
+    } else {
+      _loadAnalysis();
+      // The WebView is a heavy platform view; creating it in initState janks the
+      // push transition ("khựng 1 nhịp"). Defer it until the slide-in finishes —
+      // the video slot shows a placeholder until then, so the transition stays smooth.
+      WidgetsBinding.instance.addPostFrameCallback((_) => _initPlayerWhenSettled());
+    }
+  }
+
+  /// File mode: load the local audio into just_audio and drive the beat cursor
+  /// from its position stream (same `_pos` the grid listens to).
+  Future<void> _initFilePlayer() async {
+    final player = AudioPlayer();
+    _audio = player;
+    _sub = player.positionStream.listen((d) => _pos.value = d.inMilliseconds / 1000.0);
+    try {
+      await player.setFilePath(widget.audioFilePath!);
+      if (mounted) setState(() {});
+    } catch (e) {
+      debugPrint('file player load failed: $e');
+    }
   }
 
   void _initPlayerWhenSettled() {
@@ -97,15 +125,47 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   /// No analysis on server or on-device → build a placeholder, save it locally,
   /// and show it. Lets us play along offline until the real analyzer lands.
-  Future<void> _generate() async {
+  // Re-analyze: in file mode re-run on the same local file; otherwise via YouTube.
+  Future<void> _generate() => _runGenerate(audioFilePath: widget.audioFilePath);
+
+  /// Fallback: pick a local audio file (mp3/m4a/…) and analyze it through the
+  /// same on-device pipeline. Useful when YouTube extraction is rate-limited.
+  Future<void> _pickAndAnalyze() async {
+    final res = await FilePicker.platform.pickFiles(type: FileType.audio);
+    final path = res?.files.single.path;
+    if (path == null) return; // user cancelled
+    await _runGenerate(audioFilePath: path);
+  }
+
+  Future<void> _runGenerate({String? audioFilePath}) async {
     setState(() => _generating = true);
-    final r = await ref.read(songRepositoryProvider).generate(widget.youtubeId, title: _r?.source.title);
-    if (mounted) {
-      setState(() {
-        _r = r;
-        _analysisFailed = false;
-        _generating = false;
-      });
+    try {
+      final r = await ref
+          .read(songRepositoryProvider)
+          .generate(widget.youtubeId, title: _r?.source.title, audioFilePath: audioFilePath);
+      if (mounted) {
+        setState(() {
+          _r = r;
+          _analysisFailed = false;
+          _generating = false;
+        });
+      }
+    } catch (e, st) {
+      // Surface analysis failures instead of silently hanging the button
+      // (previously any throw left _generating stuck true forever).
+      debugPrint('on-device analyze failed: $e\n$st');
+      if (mounted) {
+        setState(() {
+          _generating = false;
+          _analysisFailed = true;
+        });
+        ScaffoldMessenger.of(context).showSnackBar(
+          SnackBar(
+            content: Text('Phân tích lỗi: $e'),
+            duration: const Duration(seconds: 10),
+          ),
+        );
+      }
     }
   }
 
@@ -113,6 +173,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   void dispose() {
     _sub?.cancel();
     _yt?.close();
+    _audio?.dispose();
     _pos.dispose();
     super.dispose();
   }
@@ -131,26 +192,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     final r = _r;
     final wide = formFactorFor(MediaQuery.sizeOf(context).width) != FormFactor.compact;
     final body = Column(crossAxisAlignment: CrossAxisAlignment.stretch, children: [
-      // Video always plays — it does not depend on our backend.
-      Padding(
-        padding: const EdgeInsets.all(AppSpace.s16),
-        child: Center(
-          child: ConstrainedBox(
-            constraints: const BoxConstraints(maxWidth: 460),
-            // Square (no card/rounding): the WebView is a platform view painted on
-            // top and can't be clipped, so a rounded card behind it just peeks out.
-            child: AspectRatio(
-                aspectRatio: 16 / 9,
-                child: _yt != null
-                    ? YoutubePlayer(controller: _yt!)
-                    : Container(
-                        color: Colors.black,
-                        child: const Center(
-                            child: Icon(Icons.play_circle_outline,
-                                color: Colors.white54, size: 64)))),
-          ),
-        ),
-      ),
+      // Playback source: YouTube video (default) or a local-file audio card.
+      _topPlayer(),
       if (r != null)
         Padding(
           padding: const EdgeInsets.symmetric(horizontal: AppSpace.s16),
@@ -168,16 +211,135 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       Expanded(child: _analysisArea(r)),
     ]);
 
+    // Re-analyze on demand: re-runs the on-device model (using the model
+    // currently selected in Settings) and updates the local analysis. Available
+    // whether or not an analysis already exists.
+    final actions = <Widget>[
+      IconButton(
+        tooltip: 'Tải file nhạc lên',
+        onPressed: _generating ? null : _pickAndAnalyze,
+        icon: const Icon(Icons.upload_file_rounded),
+      ),
+      IconButton(
+        tooltip: 'Phân tích lại (YouTube)',
+        onPressed: _generating ? null : _generate,
+        icon: _generating
+            ? const SizedBox(
+                width: 20, height: 20, child: CircularProgressIndicator(strokeWidth: 2))
+            : const Icon(Icons.refresh_rounded),
+      ),
+    ];
     if (wide) {
       return AppScaffold(
         title: 'ChordMind',
         navIndex: 0,
         rightPanel: ChordDiagramView(chord: _selectedChord),
+        actions: actions,
         body: body,
       );
     }
     // Detail screen: no bottom nav, just the AppBar back button.
-    return AppScaffold(title: r?.source.title ?? 'ChordMind', body: body, showNav: false);
+    return AppScaffold(
+        title: r?.source.title ?? 'ChordMind', actions: actions, body: body, showNav: false);
+  }
+
+  Widget _topPlayer() {
+    if (_fileMode) return _audioCard();
+    // Video (YouTube). Square (no rounding): the WebView is a platform view
+    // painted on top and can't be clipped.
+    return Padding(
+      padding: const EdgeInsets.all(AppSpace.s16),
+      child: Center(
+        child: ConstrainedBox(
+          constraints: const BoxConstraints(maxWidth: 460),
+          child: AspectRatio(
+            aspectRatio: 16 / 9,
+            child: _yt != null
+                ? YoutubePlayer(controller: _yt!)
+                : Container(
+                    color: Colors.black,
+                    child: const Center(
+                        child: Icon(Icons.play_circle_outline, color: Colors.white54, size: 64))),
+          ),
+        ),
+      ),
+    );
+  }
+
+  static String _fmt(Duration d) =>
+      '${d.inMinutes}:${(d.inSeconds % 60).toString().padLeft(2, '0')}';
+
+  Widget _audioCard() {
+    final audio = _audio;
+    final name = p.basename(widget.audioFilePath!);
+    return Padding(
+      padding: const EdgeInsets.all(AppSpace.s16),
+      child: Container(
+        padding: const EdgeInsets.all(AppSpace.s16),
+        decoration: BoxDecoration(
+            gradient: AppGradients.brand, borderRadius: BorderRadius.circular(AppRadii.lg)),
+        child: Column(children: [
+          Row(children: [
+            const Icon(Icons.audiotrack_rounded, color: Colors.white, size: 28),
+            const SizedBox(width: AppSpace.s12),
+            Expanded(
+                child: Text(name,
+                    maxLines: 1,
+                    overflow: TextOverflow.ellipsis,
+                    style: const TextStyle(color: Colors.white, fontWeight: FontWeight.w600))),
+          ]),
+          if (audio == null)
+            const Padding(
+              padding: EdgeInsets.all(AppSpace.s16),
+              child: CircularProgressIndicator(color: Colors.white),
+            )
+          else
+            StreamBuilder<Duration>(
+              stream: audio.positionStream,
+              builder: (_, posSnap) {
+                final pos = posSnap.data ?? Duration.zero;
+                final dur = audio.duration ?? Duration.zero;
+                final maxMs = dur.inMilliseconds.toDouble();
+                final valMs = pos.inMilliseconds.clamp(0, dur.inMilliseconds).toDouble();
+                return Column(children: [
+                  SliderTheme(
+                    data: SliderTheme.of(context).copyWith(
+                      activeTrackColor: Colors.white,
+                      inactiveTrackColor: Colors.white24,
+                      thumbColor: Colors.white,
+                      overlayColor: Colors.white24,
+                    ),
+                    child: Slider(
+                      value: maxMs > 0 ? valMs : 0,
+                      max: maxMs > 0 ? maxMs : 1,
+                      onChanged: (v) => audio.seek(Duration(milliseconds: v.round())),
+                    ),
+                  ),
+                  Row(children: [
+                    Text(_fmt(pos), style: const TextStyle(color: Colors.white70)),
+                    const Spacer(),
+                    StreamBuilder<PlayerState>(
+                      stream: audio.playerStateStream,
+                      builder: (_, s) {
+                        final playing = s.data?.playing ?? false;
+                        return IconButton(
+                          iconSize: 48,
+                          color: Colors.white,
+                          icon: Icon(
+                              playing ? Icons.pause_circle_filled : Icons.play_circle_filled),
+                          onPressed: () => playing ? audio.pause() : audio.play(),
+                        );
+                      },
+                    ),
+                    const Spacer(),
+                    Text(_fmt(dur), style: const TextStyle(color: Colors.white70)),
+                  ]),
+                ]);
+              },
+            ),
+        ]),
+      ),
+    );
   }
 
   Widget _analysisArea(AnalysisResult? r) {
@@ -219,7 +381,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       case 0:
         return ValueListenableBuilder<double>(
           valueListenable: _pos,
-          builder: (_, pos, _) => ChordGrid(
+          builder: (_, pos, _) => ChordTimeline(
               result: r,
               positionSeconds: pos,
               semitones: _transpose,

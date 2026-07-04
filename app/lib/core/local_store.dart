@@ -10,7 +10,9 @@ import 'models.dart';
 /// ponytail: SharedPreferences is plenty for a handful of songs; move to sqflite
 /// only if the library grows large.
 class LocalStore {
-  static const _prefix = 'song:';
+  // Bumped to v1 to invalidate any pre-B1.5 cached demo/sample analyses so the
+  // real on-device model runs instead of returning stale placeholder data.
+  static const _prefix = 'song:v1:';
 
   Future<AnalysisResult?> get(String youtubeId) async {
     final p = await SharedPreferences.getInstance();
