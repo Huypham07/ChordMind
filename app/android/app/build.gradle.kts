@@ -6,7 +6,10 @@ plugins {
 
 android {
     namespace = "com.chordmind.chordmind"
-    compileSdk = flutter.compileSdkVersion
+    // onnxruntime's AAR pulls in androidx (core 1.17, fragment, lifecycle,
+    // window) that require compileSdk 36; flutter.compileSdkVersion resolved to
+    // 33 here, so pin it to the current ceiling.
+    compileSdk = 36
     ndkVersion = flutter.ndkVersion
 
     compileOptions {
@@ -19,7 +22,8 @@ android {
         applicationId = "com.chordmind.chordmind"
         // You can update the following values to match your application needs.
         // For more information, see: https://flutter.dev/to/review-gradle-config.
-        minSdk = flutter.minSdkVersion
+        // onnxruntime + ffmpeg_kit_flutter_new both require minSdk >= 24.
+        minSdk = maxOf(flutter.minSdkVersion, 24)
         targetSdk = flutter.targetSdkVersion
         versionCode = flutter.versionCode
         versionName = flutter.versionName
