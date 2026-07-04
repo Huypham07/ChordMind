@@ -20,6 +20,35 @@ const _flatName = {1: 'Db', 3: 'Eb', 6: 'Gb', 8: 'Ab', 10: 'Bb'};
 const _sharpFifths = {1: 7, 3: 9, 6: 6, 8: 8, 10: 10};
 const _flatFifths = {1: -5, 3: -3, 6: -6, 8: -4, 10: -2};
 
+/// Harte quality suffix (after ':') -> common short form.
+const _shortQuality = {
+  'maj': '', '': '', 'major': '',
+  'min': 'm', 'minor': 'm',
+  'dim': 'dim', 'aug': 'aug',
+  '7': '7', 'maj7': 'maj7', 'min7': 'm7', 'minmaj7': 'm(maj7)',
+  '6': '6', 'maj6': '6', 'min6': 'm6',
+  '9': '9', 'maj9': 'maj9', 'min9': 'm9',
+  'dim7': 'dim7', 'hdim7': 'm7b5', 'min7b5': 'm7b5',
+  'sus2': 'sus2', 'sus4': 'sus4', 'sus4(b7)': '7sus4',
+};
+
+/// Abbreviate a Harte-style chord label ("A:min7", "F#:maj", "C:min/b3") to the
+/// short form musicians write ("Am7", "F#", "Cm/b3"). Leaves 'N'/'X' and the
+/// empty/placeholder markers untouched. Root spelling is preserved (call
+/// [transposeChord] first if transposing).
+String shortChord(String chord) {
+  // 'N' (no chord) and 'X' (unknown) render as nothing — we only show real chords.
+  if (chord == 'N' || chord == 'X') return '';
+  if (chord.isEmpty || chord == '—' || chord == '·') return chord;
+  final slash = chord.split('/');
+  final parts = slash[0].split(':');
+  final root = parts[0];
+  final qual = parts.length > 1 ? parts[1] : '';
+  final suffix = _shortQuality[qual] ?? qual; // unknown quality: keep as-is
+  final bass = slash.length > 1 ? '/${slash[1]}' : '';
+  return '$root$suffix$bass';
+}
+
 /// Transpose [chord] by [semitones], spelling accidentals to fit the resulting
 /// key. [key] is the song key ("C major" / "A minor"). Preserves the suffix and
 /// slash-bass; unrecognized roots are left alone.

@@ -2,7 +2,6 @@ import 'package:flutter/material.dart';
 import 'package:chordmind/core/models.dart';
 import 'package:chordmind/core/theme.dart';
 import 'package:chordmind/core/transpose.dart';
-import 'grid_sync.dart';
 
 class CurrentChordBar extends StatelessWidget {
   final AnalysisResult result;
@@ -17,12 +16,16 @@ class CurrentChordBar extends StatelessWidget {
       this.songKey = 'C major'});
   @override
   Widget build(BuildContext context) {
-    final i = activeChordIndex(result, positionSeconds);
-    final cells = result.synchronizedChords;
-    final current = i >= 0 ? transposeChord(cells[i].chord, semitones, key: songKey) : '—';
-    final next = (i >= 0 && i + 1 < cells.length)
-        ? transposeChord(cells[i + 1].chord, semitones, key: songKey)
-        : null;
+    // Real chord segments (skip N/X), matched to real playback time — same basis
+    // as ChordTimeline, so the banner stays in sync with the audio.
+    final segs = <({String label, double start, double end})>[];
+    for (final c in result.chords) {
+      final lbl = shortChord(transposeChord(c.chord, semitones, key: songKey));
+      if (lbl.isNotEmpty) segs.add((label: lbl, start: c.start, end: c.end));
+    }
+    final i = segs.indexWhere((s) => positionSeconds >= s.start && positionSeconds < s.end);
+    final current = i >= 0 ? segs[i].label : '—';
+    final next = (i >= 0 && i + 1 < segs.length) ? segs[i + 1].label : null;
     return Container(
       padding: const EdgeInsets.all(AppSpace.s16),
       decoration: BoxDecoration(gradient: AppGradients.brand, borderRadius: BorderRadius.circular(AppRadii.lg)),

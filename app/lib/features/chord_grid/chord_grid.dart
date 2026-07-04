@@ -42,7 +42,8 @@ class ChordGrid extends StatelessWidget {
     final labelAt = <int, String>{};
     for (final sc in result.synchronizedChords) {
       if (sc.beatIndex >= 0 && sc.beatIndex < beats.length) {
-        labelAt[sc.beatIndex] = transposeChord(sc.chord, semitones, key: songKey);
+        final lbl = shortChord(transposeChord(sc.chord, semitones, key: songKey));
+        if (lbl.isNotEmpty) labelAt[sc.beatIndex] = lbl; // skip N/X (no chord)
       }
     }
     final chordPerBeat = List<String?>.filled(beats.length, null);
