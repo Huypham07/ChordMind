@@ -87,7 +87,12 @@ void main() {
       ];
       expect(result.downbeats, expectedDownbeats);
 
-      expect(result.synchronizedChords, hasLength(result.beats.length));
+      // One synchronizedChord per chord CHANGE (not per beat). Post-denoise
+      // (issue #5) the fixture's sub-0.3s flicker collapses, so this is
+      // bounded by the beat count, not equal to it.
+      expect(result.synchronizedChords, isNotEmpty);
+      expect(result.synchronizedChords.length,
+          lessThanOrEqualTo(result.beats.length));
       for (final sc in result.synchronizedChords) {
         expect(sc.beatIndex, greaterThanOrEqualTo(0));
         expect(sc.beatIndex, lessThan(result.beats.length));
