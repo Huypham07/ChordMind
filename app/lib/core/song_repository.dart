@@ -3,7 +3,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'api.dart';
 import 'local_store.dart';
 import 'models.dart';
-import 'sample.dart';
+import 'on_device_analyzer.dart';
 
 /// Clean-arch boundary: features depend on this, not on ChordMindApi/LocalStore.
 abstract class SongRepository {
@@ -11,16 +11,19 @@ abstract class SongRepository {
   /// on-device store. Throws if neither has it (caller offers "generate").
   Future<AnalysisResult> get(String youtubeId);
 
-  /// Create a placeholder analysis on-device and persist it locally.
-  /// ponytail: fake sample until the real analyzer lands; a future sync can
-  /// push locally-generated songs to the server once both are connected.
+  /// Run the on-device analyzer (YouTube audio -> PCM -> ONNX chord
+  /// inference -> decode -> AnalysisResult) and persist it locally. A
+  /// future sync can push locally-generated songs to the server once both
+  /// are connected.
   Future<AnalysisResult> generate(String youtubeId, {String? title});
 }
 
 class DefaultSongRepository implements SongRepository {
   final ChordMindApi _api;
   final LocalStore _local;
-  DefaultSongRepository(this._api, this._local);
+  final OnDeviceAnalyzer _analyzer;
+  DefaultSongRepository(this._api, this._local, [OnDeviceAnalyzer? analyzer])
+      : _analyzer = analyzer ?? OnDeviceAnalyzer();
 
   @override
   Future<AnalysisResult> get(String youtubeId) async {
@@ -35,7 +38,7 @@ class DefaultSongRepository implements SongRepository {
 
   @override
   Future<AnalysisResult> generate(String youtubeId, {String? title}) async {
-    final json = generateSampleJson(youtubeId, title: title);
+    final json = await _analyzer.analyze(youtubeId, title: title);
     await _local.save(youtubeId, json);
     return AnalysisResult.fromJson(json);
   }
