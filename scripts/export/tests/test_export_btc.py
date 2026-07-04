@@ -1,7 +1,7 @@
 import pytest, numpy as np, onnxruntime as ort
 from pathlib import Path
 from scripts.export.export_chordnet import export_btc
-from scripts.export.config import REFERENCE_ROOT, FEATURE, ARTIFACTS_DIR
+from scripts.export.config import REFERENCE_ROOT, FEATURE
 
 CKPT = REFERENCE_ROOT / "checkpoints" / "btc_model_best.pth"
 

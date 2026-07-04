@@ -63,6 +63,9 @@ def test_frontend_preserves_six_head_argmax(fixture):
         a_ref = np.argmax(p_ref[:n], axis=1)
         a_test = np.argmax(np.asarray(p_test)[:n], axis=1)
         agreement = float(np.mean(a_ref == a_test))
+        # ponytail: ==1.0 (not the 0.999 export/parity bar) is intentional here --
+        # CCLFrontend is the identity function on the same feature array, so this
+        # is an identity-by-construction check, not float-drift-tolerant parity.
         assert agreement == 1.0, f"{name} head argmax agreement {agreement} != 1.0"
 
 

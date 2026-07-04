@@ -58,9 +58,16 @@ def _main_ccl() -> int:
     return 0
 
 
+VALID_NAMES = ("chordnet_2e1d", "btc", "chord_cnn_lstm")
+
+
 def main(name: str) -> int:
     if name == "chord_cnn_lstm":
         return _main_ccl()
+
+    if name not in MODELS:
+        print(f"Unknown model {name!r}. Valid names: {', '.join(VALID_NAMES)}")
+        return 1
 
     rel, step, decode, model_type = MODELS[name]
     ckpt = REFERENCE_ROOT / rel

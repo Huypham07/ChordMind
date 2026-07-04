@@ -20,7 +20,7 @@ def test_onnx_matches_reference(tmp_path):
     reference agree on the predicted chord per frame? Raw logit diff is
     checked only as a loose ceiling to catch a gross future regression --
     nnAudio's CQT differs numerically from librosa's, so exact logit
-    parity is not the gate (see task-5-report.md)."""
+    parity is not the gate."""
     onnx = export_chordnet(CKPT, tmp_path / "m.onnx")
     for wav in CLIPS[:3]:
         assert argmax_agreement(onnx, CKPT, wav) == 1.0

@@ -1,9 +1,12 @@
+import types
+
+import librosa
 import numpy as np
 import pytest
 import torch
 
 from scripts.export.config import CCL_REFERENCE_ROOT
-from scripts.export.load_ccl import CHECKPOINT_STEM, load_ccl, reference_probs
+from scripts.export.load_ccl import CHECKPOINT_STEM, _cqt_v2, _import_reference, load_ccl, reference_probs
 
 CKPT = CCL_REFERENCE_ROOT / "cache_data" / f"{CHECKPOINT_STEM}.sdict"
 FIXTURE = CCL_REFERENCE_ROOT.parents[1] / "scripts" / "export" / "tests" / "fixtures" / "triad_cmaj.wav"
@@ -43,3 +46,44 @@ def test_reference_probs_six_heads_non_degenerate():
     # to a single constant class for the whole clip.
     triad_argmax = np.argmax(probs[0], axis=1)
     assert len(np.unique(triad_argmax)) > 1
+
+
+class _FakeEntry:
+    """Minimal duck-typed stand-in for `mir.data_file.DataEntry`.
+
+    `extractors.cqt.CQTV2.extract` (see `ExtractorBase.extract`) only ever
+    reads `entry.music` and `entry.prop.hop_length` off whatever object it's
+    given -- it never touches the rest of the `DataEntry`/`mir` framework
+    machinery (property caching, file IO, etc). So a tiny stand-in with just
+    those two attributes is enough to invoke the real reference extractor
+    without pulling in `DataEntry.append_file`/`MusicIO`.
+    """
+
+    def __init__(self, music, hop_length):
+        self.music = music
+        self.prop = types.SimpleNamespace(hop_length=hop_length)
+
+
+@pytest.mark.skipif(not FIXTURE.exists(), reason="fixture wav not present")
+def test_cqt_v2_matches_reference_extractor():
+    """Regression guard for the Plan B gap: `_cqt_v2` (used on both sides of
+    CCL feature-in parity, see `load_ccl.py` module docstring) could drift
+    from the *actual* reference `extractors.cqt.CQTV2.extract` without any
+    existing test catching it, since parity tests only compare `_cqt_v2`
+    against itself. This runs the real reference extractor -- imported the
+    same way `load_ccl._import_reference` imports `chordnet_ismir_naive`,
+    via `sys.path` insertion of `CCL_REFERENCE_ROOT` -- on a minimal
+    duck-typed entry (see `_FakeEntry`) mirroring exactly what
+    `chord_recognition.py` sets up (`entry.prop.hop_length=512`,
+    `entry.music` from `librosa.load`), and asserts it matches `_cqt_v2`.
+    """
+    _import_reference()  # ensures CCL_REFERENCE_ROOT is on sys.path
+    from extractors.cqt import CQTV2  # noqa: E402 (reference module)
+
+    music, _sr = librosa.load(str(FIXTURE), sr=22050)
+    entry = _FakeEntry(music=music, hop_length=512)
+    reference_feature = CQTV2().extract(entry)
+
+    feature = _cqt_v2(FIXTURE, 22050)
+
+    assert np.allclose(reference_feature, feature)

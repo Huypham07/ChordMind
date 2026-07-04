@@ -1,6 +1,7 @@
 {
   "chordnet_2e1d": {
     "name": "chordnet_2e1d",
+    "model": "chordnet-2e1d",
     "step": "chord",
     "file": "chordnet_2e1d.onnx",
     "sha256": "ccfadd452262059c8a050f0cfdb3a6916a0dd0f47d0582bc696b38c5c48dbb85",
@@ -186,6 +187,7 @@
   },
   "btc": {
     "name": "btc",
+    "model": "btc",
     "step": "chord",
     "file": "btc.onnx",
     "sha256": "04c3e22c1f20ff1845846bef6685fe4d92235569831412d4a7743c330bd5e335",
@@ -415,6 +417,11 @@
         "name": "thirteenth",
         "dim": 3
       }
-    ]
+    ],
+    "decode_assets": [
+      "reference/chord-cnn-lstm-model/data/submission_chord_list.txt"
+    ],
+    "decode_note": "6 head argmaxes (triad/bass/seventh/ninth/eleventh/thirteenth) are combined via XHMM Viterbi decoding over the chord templates in decode_assets, not read independently; see extractors/xhmm_ismir.py:XHMMDecoder.decode and chord_recognition.py for the reference call sequence.",
+    "heads_semantics": "see complex_chord.py (TriadTypes/SeventhTypes/NinthTypes/EleventhTypes/ThirteenthTypes enums, ChordTypeLimit slicing) for what each head's class indices mean"
   }
 }

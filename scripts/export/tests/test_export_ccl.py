@@ -1,7 +1,6 @@
 import numpy as np
 import onnxruntime as ort
 import pytest
-import torch
 
 from scripts.export.config import CCL_REFERENCE_ROOT
 from scripts.export.export_ccl import HEAD_NAMES, export_ccl
@@ -55,4 +54,6 @@ def test_onnx_matches_reference_per_head_argmax(fixture, tmp_path):
         a_ref = np.argmax(p_ref[:n], axis=1)
         a_onnx = np.argmax(p_onnx[:n], axis=1)
         agreement = float(np.mean(a_ref == a_onnx))
-        assert agreement >= 0.99, f"{name} head argmax agreement {agreement} < 0.99"
+        # ponytail: standardized on 0.999 (matches the CLI gate / test_parity_ccl.py)
+        # so there's one bar for CCL argmax agreement across the export suite.
+        assert agreement >= 0.999, f"{name} head argmax agreement {agreement} < 0.999"
