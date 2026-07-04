@@ -24,6 +24,7 @@ import torch
 
 from scripts.export.config import FEATURE, REFERENCE_ROOT
 from scripts.export.load_chordnet import load_bundle
+from scripts.export.load_ccl import _cqt_v2, load_ccl, reference_probs
 
 sys.path.insert(0, str(REFERENCE_ROOT))
 
@@ -77,3 +78,26 @@ def argmax_agreement(onnx_path, ckpt_path, wav, model_type="ChordNet") -> float:
     a, b = _paired_logits(onnx_path, ckpt_path, wav, model_type)
     agree = np.argmax(a, axis=-1) == np.argmax(b, axis=-1)
     return float(np.mean(agree))
+
+
+def ccl_head_agreement(onnx_path, wav) -> tuple:
+    """Per-head argmax agreement between the exported feature-in
+    chord-cnn-lstm ONNX graph and the reference `ChordNet.inference` path,
+    on the SAME `_cqt_v2` feature fed to both sides. Returns 6 floats, one
+    per head, in `export_ccl.HEAD_NAMES` order (triad/bass/seventh/ninth/
+    eleventh/thirteenth).
+    """
+    bundle = load_ccl()
+    ref_probs = reference_probs(bundle.net, wav, sample_rate=bundle.sample_rate)
+
+    sess = ort.InferenceSession(str(onnx_path))
+    feature = _cqt_v2(wav, bundle.sample_rate)
+    onnx_probs = sess.run(None, {"feature": feature})
+
+    agreements = []
+    for p_ref, p_onnx in zip(ref_probs, onnx_probs):
+        n = min(p_ref.shape[0], p_onnx.shape[0])
+        a_ref = np.argmax(p_ref[:n], axis=1)
+        a_onnx = np.argmax(p_onnx[:n], axis=1)
+        agreements.append(float(np.mean(a_ref == a_onnx)))
+    return tuple(agreements)
