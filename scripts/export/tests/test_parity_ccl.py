@@ -22,4 +22,6 @@ def test_ccl_head_agreement_all_heads_pass(fixture, tmp_path):
 
     assert len(agreements) == 6
     for agreement in agreements:
-        assert agreement >= 0.99
+        # ponytail: 0.999 (not 1.0) absorbs ORT-vs-torch float drift only;
+        # see CCL_GATE_THRESHOLD in scripts/export/__main__.py for rationale.
+        assert agreement >= 0.999
