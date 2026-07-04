@@ -40,6 +40,10 @@ dependencies:
   go_router: ^14.0.0
   shared_preferences: ^2.3.0
   onnxruntime: ^1.4.1
+  youtube_explode_dart: ^3.1.0
+  ffmpeg_kit_flutter_new: ^4.3.2
+  path: ^1.9.1
+  path_provider: ^2.1.6
 
 dev_dependencies:
   flutter_test:
