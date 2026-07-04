@@ -97,6 +97,25 @@ void main() {
 
       expect(result.segments, isEmpty);
     });
+
+    test('honors an explicit modelName (btc) instead of the registry default', () async {
+      final analyzer = OnDeviceAnalyzer(audioSource: _FixturePcmAudioSource(fixturePcm));
+
+      final json = await analyzer.analyze('testid', title: 'T', modelName: 'btc');
+      final result = AnalysisResult.fromJson(json);
+
+      // btc has the same fs/windowSamples as chordnet_2e1d (see manifest),
+      // so the pipeline still produces a valid result; this only proves
+      // the btc spec was actually used (not silently ignored) via a
+      // regression check: an unknown model name must fail the same way.
+      expect(result.chords, isNotEmpty);
+      expect(result.key, matches(_keyPattern));
+
+      await expectLater(
+        analyzer.analyze('testid', modelName: 'not_a_real_model'),
+        throwsArgumentError,
+      );
+    });
   });
 
   group('DefaultSongRepository.generate (on-device wiring)', () {
@@ -121,7 +140,34 @@ void main() {
       expect(fetched.songId, 'song123');
       expect(fetched.chords.length, result.chords.length);
     });
+
+    test('passes the selected chord model through to the analyzer', () async {
+      String? seenModelName;
+      final analyzer = _RecordingAnalyzer(fixturePcm, (name) => seenModelName = name);
+      final local = LocalStore();
+      final repo = DefaultSongRepository(_ThrowingApi(), local, analyzer, () => 'btc');
+
+      await repo.generate('song456');
+
+      expect(seenModelName, 'btc');
+    });
   });
+}
+
+/// Wraps a real OnDeviceAnalyzer over fixture PCM but records the
+/// `modelName` it was called with, so tests can assert
+/// DefaultSongRepository.generate actually forwards the selected model
+/// (rather than always using the registry default).
+class _RecordingAnalyzer extends OnDeviceAnalyzer {
+  _RecordingAnalyzer(Float32List pcm, this._onModelName)
+      : super(audioSource: _FixturePcmAudioSource(pcm));
+  final void Function(String? modelName) _onModelName;
+
+  @override
+  Future<Map<String, dynamic>> analyze(String youtubeId, {String? title, String? modelName}) {
+    _onModelName(modelName);
+    return super.analyze(youtubeId, title: title, modelName: modelName);
+  }
 }
 
 /// A ChordMindApi stand-in whose `get` always fails, forcing

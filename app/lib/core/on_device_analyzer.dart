@@ -44,10 +44,15 @@ class OnDeviceAnalyzer {
   /// the raw JSON Map matching `AnalysisResult.fromJson`'s expected shape.
   /// Throws on any pipeline failure (audio fetch/decode, ORT inference,
   /// etc.) — callers (e.g. `SongRepository.generate`) surface the error.
-  Future<Map<String, dynamic>> analyze(String youtubeId, {String? title}) async {
+  ///
+  /// [modelName] selects which chord model (see `ModelRegistry`) to run;
+  /// `null` (the default) resolves to the registry's default model
+  /// (chordnet_2e1d). Callers pass the user's `settings_store.dart`
+  /// selection here.
+  Future<Map<String, dynamic>> analyze(String youtubeId, {String? title, String? modelName}) async {
     final Float32List pcm = await audioSource.pcm(youtubeId);
     final registry = await _ensureRegistry();
-    final spec = registry.defaultModel;
+    final spec = registry.byName(modelName);
 
     final runner = PcmInferenceRunner(spec);
     List<Chord> chords;
