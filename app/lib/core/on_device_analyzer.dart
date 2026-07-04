@@ -17,7 +17,7 @@
 // cycling 1..4, downbeats where beatNum==1. This is NOT detected tempo —
 // it is a fixed placeholder purely so the grid has something regular to
 // snap chords to. Replace with real beat detection when that model ships.
-import 'dart:typed_data';
+import 'package:flutter/foundation.dart';
 
 import 'audio_source.dart';
 import 'decode/key_krumhansl.dart';
@@ -49,21 +49,33 @@ class OnDeviceAnalyzer {
   /// `null` (the default) resolves to the registry's default model
   /// (chordnet_2e1d). Callers pass the user's `settings_store.dart`
   /// selection here.
-  Future<Map<String, dynamic>> analyze(String youtubeId, {String? title, String? modelName}) async {
-    final Float32List pcm = await audioSource.pcm(youtubeId);
+  /// [audioFilePath], when given, decodes that LOCAL audio file instead of
+  /// fetching from YouTube (fallback for rate-limiting / non-YouTube audio).
+  Future<Map<String, dynamic>> analyze(String youtubeId,
+      {String? title, String? modelName, String? audioFilePath}) async {
+    debugPrint('[analyze] start id=$youtubeId model=${modelName ?? "(default)"}'
+        '${audioFilePath != null ? " file=$audioFilePath" : ""}');
+    final Float32List pcm = audioFilePath != null
+        ? await audioSource.pcmFromFile(audioFilePath)
+        : await audioSource.pcm(youtubeId);
+    debugPrint('[analyze] pcm ready: ${pcm.length} samples');
     final registry = await _ensureRegistry();
     final spec = registry.byName(modelName);
+    debugPrint('[analyze] model=${spec.name} input=${spec.input}');
 
     final runner = PcmInferenceRunner(spec);
     List<Chord> chords;
     try {
       final frames = await runner.run(pcm);
+      debugPrint('[analyze] inference done: ${frames.length} frames');
       chords = voteDecode(frames, spec);
     } finally {
       runner.dispose();
     }
+    debugPrint('[analyze] decoded ${chords.length} chords');
 
     final key = estimateKey(chords);
+    debugPrint('[analyze] key=$key — done');
     final duration = pcm.length / spec.fs;
 
     final interval = 60.0 / placeholderBpm;
@@ -85,10 +97,18 @@ class OnDeviceAnalyzer {
       return chords.last.chord;
     }
 
-    final synchronizedChords = [
-      for (var i = 0; i < beats.length; i++)
-        {'chord': chordAt(beats[i]['time'] as double), 'beatIndex': i},
-    ];
+    // Emit a synchronizedChord only where the chord CHANGES (not once per beat),
+    // so the grid shows a label at the start of each run and blanks between —
+    // e.g. one "G" at the start of a G phrase, not G on every beat.
+    final synchronizedChords = <Map<String, dynamic>>[];
+    String? prevChord;
+    for (var i = 0; i < beats.length; i++) {
+      final ch = chordAt(beats[i]['time'] as double);
+      if (ch != prevChord) {
+        synchronizedChords.add({'chord': ch, 'beatIndex': i});
+        prevChord = ch;
+      }
+    }
 
     return {
       'songId': youtubeId,

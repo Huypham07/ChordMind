@@ -48,3 +48,4 @@ app.*.map.json
 # tool/sync_models.sh from artifacts/onnx/, never committed. manifest.json
 # in the same directory IS committed (small, drives the model registry).
 /assets/models/*.onnx
+android/build/

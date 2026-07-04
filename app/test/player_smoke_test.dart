@@ -12,7 +12,8 @@ class _FakeRepo implements SongRepository {
   @override
   Future<AnalysisResult> get(String id) async => sampleAnalysis;
   @override
-  Future<AnalysisResult> generate(String id, {String? title}) async => sampleAnalysis;
+  Future<AnalysisResult> generate(String id, {String? title, String? audioFilePath}) async =>
+      sampleAnalysis;
 }
 
 void main() {

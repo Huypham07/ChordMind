@@ -145,4 +145,12 @@ class AudioSource {
       yt.close();
     }
   }
+
+  /// Decode a LOCAL audio file (mp3/m4a/wav/…) to mono float32 PCM. Fallback
+  /// for when YouTube extraction is rate-limited/unavailable — lets the user
+  /// push their own audio through the same on-device pipeline.
+  Future<Float32List> pcmFromFile(String path) async {
+    final bytes = await File(path).readAsBytes();
+    return decoder.toPcm(bytes);
+  }
 }

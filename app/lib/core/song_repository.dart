@@ -17,7 +17,9 @@ abstract class SongRepository {
   /// inference -> decode -> AnalysisResult) and persist it locally. A
   /// future sync can push locally-generated songs to the server once both
   /// are connected.
-  Future<AnalysisResult> generate(String youtubeId, {String? title});
+  /// [audioFilePath], when given, analyzes that local audio file instead of
+  /// fetching from YouTube (fallback for rate-limiting / user-supplied audio).
+  Future<AnalysisResult> generate(String youtubeId, {String? title, String? audioFilePath});
 }
 
 class DefaultSongRepository implements SongRepository {
@@ -48,8 +50,9 @@ class DefaultSongRepository implements SongRepository {
   }
 
   @override
-  Future<AnalysisResult> generate(String youtubeId, {String? title}) async {
-    final json = await _analyzer.analyze(youtubeId, title: title, modelName: _selectedChordModel());
+  Future<AnalysisResult> generate(String youtubeId, {String? title, String? audioFilePath}) async {
+    final json = await _analyzer.analyze(youtubeId,
+        title: title, modelName: _selectedChordModel(), audioFilePath: audioFilePath);
     await _local.save(youtubeId, json);
     return AnalysisResult.fromJson(json);
   }

@@ -45,6 +45,8 @@ dependencies:
   path: ^1.9.1
   path_provider: ^2.1.6
   crypto: ^3.0.3
+  file_picker: ^8.1.0
+  just_audio: ^0.9.42
 
 dev_dependencies:
   flutter_test:

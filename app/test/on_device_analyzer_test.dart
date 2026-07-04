@@ -164,9 +164,11 @@ class _RecordingAnalyzer extends OnDeviceAnalyzer {
   final void Function(String? modelName) _onModelName;
 
   @override
-  Future<Map<String, dynamic>> analyze(String youtubeId, {String? title, String? modelName}) {
+  Future<Map<String, dynamic>> analyze(String youtubeId,
+      {String? title, String? modelName, String? audioFilePath}) {
     _onModelName(modelName);
-    return super.analyze(youtubeId, title: title, modelName: modelName);
+    return super
+        .analyze(youtubeId, title: title, modelName: modelName, audioFilePath: audioFilePath);
   }
 }
 

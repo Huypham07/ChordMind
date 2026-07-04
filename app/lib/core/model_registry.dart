@@ -9,6 +9,7 @@ import 'dart:typed_data';
 
 import 'package:crypto/crypto.dart';
 import 'package:flutter/services.dart' show rootBundle;
+import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 const _manifestAsset = 'assets/models/manifest.json';
 const _modelsAssetDir = 'assets/models';
@@ -134,3 +135,9 @@ class ModelRegistry {
     return digest.toString() == spec.sha256;
   }
 }
+
+/// Loads [ModelRegistry] once per app (or provider container). Screens that
+/// list/select models (e.g. Settings) watch this instead of calling
+/// [ModelRegistry.load] directly; tests can override it with an in-memory
+/// registry to avoid asset loading.
+final modelRegistryProvider = FutureProvider<ModelRegistry>((_) => ModelRegistry.load());
