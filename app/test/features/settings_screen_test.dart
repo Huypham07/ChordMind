@@ -74,5 +74,8 @@ void main() {
     await t.pump();
 
     expect(container.read(selectedChordModelProvider), 'chordnet_2e1d');
-  }, skip: 'Pre-existing flaky test - subprocess crash during pumpAndSettle');
+    // Pre-existing hang: the shared pump() helper's pumpAndSettle deadlocks in
+    // this test harness (reproduced at base commit, unrelated to the model
+    // default). testWidgets.skip only takes a bool.
+  }, skip: true);
 }
