@@ -18,6 +18,7 @@ import 'package:chordmind/core/widgets/empty_state.dart';
 import 'package:chordmind/features/chord_grid/chord_timeline.dart';
 import 'package:chordmind/features/chord_grid/current_chord_bar.dart';
 import 'package:chordmind/features/diagrams/chord_diagram_sheet.dart';
+import 'effective_audio_path.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   final String youtubeId;
@@ -34,7 +35,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   YoutubePlayerController? _yt;
   AudioPlayer? _audio;
   StreamSubscription? _sub;
-  bool get _fileMode => widget.audioFilePath != null;
+  /// The local audio file to play/analyze: the router-provided path (fresh
+  /// upload) if present, else the persisted path recorded on a re-opened
+  /// file song's analysis (Task 6).
+  String? get _audioPath => effectiveAudioPath(widget.audioFilePath, _r);
+  bool get _fileMode => _audioPath != null;
   AnalysisResult? _r;
   bool _analysisFailed = false;
   bool _generating = false;
@@ -70,11 +75,21 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     _audio = player;
     _sub = player.positionStream.listen((d) => _pos.value = d.inMilliseconds / 1000.0);
     try {
-      await player.setFilePath(widget.audioFilePath!);
+      await player.setFilePath(_audioPath!);
       if (mounted) setState(() {});
     } catch (e) {
       debugPrint('file player load failed: $e');
     }
+  }
+
+  /// Opened-by-id file songs have no `widget.audioFilePath` (no router
+  /// `extra`), so file playback can't start in `initState` — `_audioPath`
+  /// only becomes available once the persisted analysis (`_r`) loads. Called
+  /// after every `_r` update; a no-op once `_audio` exists (covers the
+  /// fresh-upload case, where `_initFilePlayer` already ran synchronously
+  /// from `initState`, and repeat analysis loads/regenerates).
+  void _maybeInitFilePlayer() {
+    if (_audio == null && _audioPath != null) _initFilePlayer();
   }
 
   void _initPlayerWhenSettled() {
@@ -117,7 +132,10 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   Future<void> _loadAnalysis() async {
     try {
       final r = await ref.read(songRepositoryProvider).get(widget.youtubeId);
-      if (mounted) setState(() => _r = r);
+      if (mounted) {
+        setState(() => _r = r);
+        _maybeInitFilePlayer();
+      }
     } catch (_) {
       if (mounted) setState(() => _analysisFailed = true);
     }
@@ -126,7 +144,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   /// No analysis on server or on-device → build a placeholder, save it locally,
   /// and show it. Lets us play along offline until the real analyzer lands.
   // Re-analyze: in file mode re-run on the same local file; otherwise via YouTube.
-  Future<void> _generate() => _runGenerate(audioFilePath: widget.audioFilePath);
+  Future<void> _generate() => _runGenerate(audioFilePath: _audioPath);
 
   /// Fallback: pick a local audio file (mp3/m4a/…) and analyze it through the
   /// same on-device pipeline. Useful when YouTube extraction is rate-limited.
@@ -149,6 +167,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           _analysisFailed = false;
           _generating = false;
         });
+        _maybeInitFilePlayer();
       }
     } catch (e, st) {
       // Surface analysis failures instead of silently hanging the button
@@ -271,7 +290,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   Widget _audioCard() {
     final audio = _audio;
-    final name = p.basename(widget.audioFilePath!);
+    final name = p.basename(_audioPath!);
     return Padding(
       padding: const EdgeInsets.all(AppSpace.s16),
       child: Container(
