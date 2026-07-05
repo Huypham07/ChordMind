@@ -3,6 +3,7 @@ import 'package:flutter/material.dart';
 import '../../core/models.dart';
 import '../../core/theme.dart';
 import '../../core/transpose.dart';
+import 'grid_sync.dart' show chordSyncLeadSeconds;
 
 /// Time-based chord view. Renders the model's REAL chord segments (their actual
 /// start/end times) and highlights the one currently playing based on
@@ -37,8 +38,10 @@ class ChordTimeline extends StatelessWidget {
     if (segs.isEmpty) {
       return Center(child: Text('Chưa có hợp âm', style: TextStyle(color: cm.textMuted)));
     }
-    final active =
-        segs.indexWhere((s) => positionSeconds >= s.start && positionSeconds < s.end);
+    // Look slightly ahead of the reported position so the highlight lands on
+    // the chord you hear, not a beat behind it (see chordSyncLeadSeconds).
+    final p = positionSeconds + chordSyncLeadSeconds;
+    final active = segs.indexWhere((s) => p >= s.start && p < s.end);
 
     return SingleChildScrollView(
       child: Wrap(
