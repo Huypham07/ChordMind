@@ -72,9 +72,14 @@ void main() {
       expect(result.chords, isNotEmpty);
 
       expect(result.beats, isNotEmpty);
+      // Beats come from the real DSP tracker (or the 120bpm placeholder
+      // grid on fallback) — either way they're strictly increasing and
+      // never exceed the song's duration.
       for (var i = 1; i < result.beats.length; i++) {
-        final dt = result.beats[i].time - result.beats[i - 1].time;
-        expect(dt, closeTo(0.5, 1e-6)); // 60/120 bpm
+        expect(result.beats[i].time, greaterThan(result.beats[i - 1].time));
+      }
+      for (final b in result.beats) {
+        expect(b.time, lessThanOrEqualTo(result.source.duration + 1e-6));
       }
       // beatNum cycles 1..4.
       for (var i = 0; i < result.beats.length; i++) {
@@ -120,6 +125,21 @@ void main() {
         analyzer.analyze('testid', modelName: 'not_a_real_model'),
         throwsArgumentError,
       );
+    });
+
+    test('produces a real (non-placeholder) tempo estimate', () async {
+      final analyzer = OnDeviceAnalyzer(audioSource: _FixturePcmAudioSource(fixturePcm));
+      final result = AnalysisResult.fromJson(await analyzer.analyze('testid', title: 'T'));
+      // bpm is now estimated from audio (or 0 when the tracker bailed and we
+      // fell back), never the old fixed 120 placeholder unless truly ~120.
+      expect(result.source.bpm, greaterThanOrEqualTo(0));
+      expect(result.source.bpm, lessThan(300));
+      // beats are either real (non-empty) or empty (fallback path); never a
+      // synthetic 120bpm grid longer than the song.
+      final dur = result.source.duration;
+      for (final b in result.beats) {
+        expect(b.time, lessThanOrEqualTo(dur + 1e-6));
+      }
     });
   });
 

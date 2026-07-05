@@ -1,25 +1,30 @@
 // app/lib/core/on_device_analyzer.dart
 //
-// Plan B Task B1.5: assembles the on-device AnalysisResult JSON from the
-// pieces built in B1.1-B1.4:
-//   AudioSource.pcm -> PcmInferenceRunner.run -> voteDecode -> estimateKey
-// and a synthetic beat grid (see below), then returns the raw JSON Map in
-// the exact shape `AnalysisResult.fromJson` / `LocalStore.save` expect
-// (mirrors `generateSampleJson`'s contract in sample.dart).
+// Plan B Task B1.5 (+ beat-sync follow-up): assembles the on-device
+// AnalysisResult JSON from the pieces built in B1.1-B1.4 plus the DSP beat
+// tracker:
+//   AudioSource.pcm -> PcmInferenceRunner.run -> DspBeatTracker.track
+//   -> beatSyncChords (or voteDecode fallback) -> estimateKey
+// then returns the raw JSON Map in the exact shape
+// `AnalysisResult.fromJson` / `LocalStore.save` expect (mirrors
+// `generateSampleJson`'s contract in sample.dart).
 //
-// Beat grid: NO beat model is exported yet (Plan A/C are chord-only; see
-// the plan's Global Constraints). The chord grid
-// (`features/chord_grid/chord_grid.dart`) renders from `beats` +
-// `synchronizedChords`, so an empty beat list would hit its no-grid
-// fallback. Until a real beat model (Beat-Transformer) lands, this emits a
-// REGULAR SYNTHETIC grid at a placeholder 120 BPM / 4-4 time signature:
-// one beat every 60/bpm seconds across the song's duration, beatNum
-// cycling 1..4, downbeats where beatNum==1. This is NOT detected tempo —
-// it is a fixed placeholder purely so the grid has something regular to
-// snap chords to. Replace with real beat detection when that model ships.
+// Beat grid: `DspBeatTracker` estimates real beat times + tempo from the
+// PCM (spectral-flux onset -> autocorrelation tempo -> Ellis DP beat
+// tracking). When it finds beats, chords are decoded beat-synchronously
+// (`beatSyncChords`) and `beats[]`/`source.bpm` reflect the real estimate,
+// with `beatNum` still cycling 1..4 (no downbeat/time-signature model
+// yet). If the tracker throws or returns no beats, this falls back to the
+// old REGULAR SYNTHETIC grid at a placeholder 120 BPM / 4-4 time
+// signature (one beat every 60/bpm seconds across the song's duration)
+// and frame-level `voteDecode`, so the chord grid
+// (`features/chord_grid/chord_grid.dart`) always has something to snap
+// chords to.
 import 'package:flutter/foundation.dart';
 
 import 'audio_source.dart';
+import 'beat/beat_tracker.dart';
+import 'decode/beat_sync.dart';
 import 'decode/key_krumhansl.dart';
 import 'decode/vote_decode.dart';
 import 'inference/pcm_runner.dart';
@@ -65,10 +70,21 @@ class OnDeviceAnalyzer {
 
     final runner = PcmInferenceRunner(spec);
     List<Chord> chords;
+    BeatResult beatResult;
     try {
       final frames = await runner.run(pcm);
       debugPrint('[analyze] inference done: ${frames.length} frames');
-      chords = voteDecode(frames, spec);
+      try {
+        beatResult = const DspBeatTracker().track(pcm, sr: spec.fs.toDouble());
+      } catch (e) {
+        debugPrint('[analyze] beat tracking failed: $e — falling back');
+        beatResult = const BeatResult([], 0);
+      }
+      final beatTimes = beatResult.beats;
+      chords = beatTimes.isEmpty
+          ? voteDecode(frames, spec)
+          : beatSyncChords(frames, beatTimes, spec);
+      debugPrint('[analyze] ${beatTimes.length} beats, ${chords.length} chords');
     } finally {
       runner.dispose();
     }
@@ -78,14 +94,26 @@ class OnDeviceAnalyzer {
     debugPrint('[analyze] key=$key — done');
     final duration = pcm.length / spec.fs;
 
-    final interval = 60.0 / placeholderBpm;
+    final beatTimes = beatResult.beats;
+    final bpm = beatTimes.isEmpty ? placeholderBpm : beatResult.bpm;
     final beats = <Map<String, dynamic>>[];
     final downbeats = <double>[];
-    var beatNum = 1;
-    for (var t = 0.0; t < duration; t += interval) {
-      beats.add({'time': t, 'beatNum': beatNum});
-      if (beatNum == 1) downbeats.add(t);
-      beatNum = beatNum % placeholderTimeSignature + 1;
+    if (beatTimes.isEmpty) {
+      // Fallback: no real beats — emit the placeholder grid as before.
+      final interval = 60.0 / placeholderBpm;
+      var beatNum = 1;
+      for (var t = 0.0; t < duration; t += interval) {
+        beats.add({'time': t, 'beatNum': beatNum});
+        if (beatNum == 1) downbeats.add(t);
+        beatNum = beatNum % placeholderTimeSignature + 1;
+      }
+    } else {
+      // Real beats; beatNum cycles as a placeholder meter (no downbeat model).
+      for (var i = 0; i < beatTimes.length; i++) {
+        final beatNum = i % placeholderTimeSignature + 1;
+        beats.add({'time': beatTimes[i], 'beatNum': beatNum});
+        if (beatNum == 1) downbeats.add(beatTimes[i]);
+      }
     }
 
     String chordAt(double t) {
@@ -116,7 +144,7 @@ class OnDeviceAnalyzer {
         'youtubeId': youtubeId,
         'title': title ?? youtubeId,
         'duration': duration,
-        'bpm': placeholderBpm,
+        'bpm': bpm,
         'timeSignature': placeholderTimeSignature,
       },
       'key': key,
