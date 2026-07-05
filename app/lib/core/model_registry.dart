@@ -13,7 +13,7 @@ import 'package:flutter_riverpod/flutter_riverpod.dart';
 
 const _manifestAsset = 'assets/models/manifest.json';
 const _modelsAssetDir = 'assets/models';
-const defaultModelName = 'chordnet_2e1d';
+const defaultModelName = 'btc';
 
 /// One classification head of the chord_cnn_lstm multi-head model
 /// (triad/bass/seventh/ninth/eleventh/thirteenth), each with its own
