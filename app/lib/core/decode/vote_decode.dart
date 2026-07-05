@@ -40,7 +40,7 @@ const fallbackFrameDur = 2048 / 22050;
 
 /// Applies the reference `majority_filter_indices` categorical majority
 /// filter to a sequence of class ids.
-List<int> _majorityFilter(List<int> values, int kernelSize) {
+List<int> majorityFilter(List<int> values, int kernelSize) {
   var kernel = kernelSize < 1 ? 1 : kernelSize;
   if (kernel % 2 == 0) kernel += 1;
   final n = values.length;
@@ -170,7 +170,7 @@ List<Chord> voteDecode(
   }
 
   final classIds = [for (final f in frames) f.classId];
-  final smoothed = _majorityFilter(classIds, smoothingKernel);
+  final smoothed = majorityFilter(classIds, smoothingKernel);
 
   // frame_dur: consecutive frame time delta (0 if only one frame).
   final frameDur =

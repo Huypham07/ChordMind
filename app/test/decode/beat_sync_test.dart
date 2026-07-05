@@ -24,9 +24,11 @@ void main() {
   test('one chord per beat interval by majority (mode) of frames', () {
     // 12 frames; beats every 4 frames ⇒ intervals [0,4)[4,8)[8,end).
     // Interval 0 mostly C, interval 1 mostly G, interval 2 mostly C.
+    // beatSmoothingKernel: 1 isolates the raw per-beat mode from the
+    // beat-level majority filter (which would out-vote the lone G beat).
     final frames = _frames([1, 1, 1, 2, 2, 2, 2, 1, 1, 1, 1, 2]);
     final beats = [0.0, 4 * _frameDur, 8 * _frameDur];
-    final chords = beatSyncChords(frames, beats, spec);
+    final chords = beatSyncChords(frames, beats, spec, beatSmoothingKernel: 1);
     expect(chords.map((c) => c.chord).toList(), ['C', 'G', 'C']);
     // Gap-free, covers the whole span.
     expect(chords.first.start, 0.0);
@@ -43,6 +45,29 @@ void main() {
     expect(chords, hasLength(1));
     expect(chords.single.chord, 'C');
     expect(chords.single.end, closeTo(8 * _frameDur, 1e-9));
+  });
+
+  test('beat-level smoothing out-votes a lone flicker beat', () {
+    // 5 beats: C C G C C — one isolated G "wedged" between held C beats.
+    final frames = _frames([
+      1, 1, 1, 1, // C
+      1, 1, 1, 1, // C
+      2, 2, 2, 2, // G (the lone flicker beat)
+      1, 1, 1, 1, // C
+      1, 1, 1, 1, // C
+    ]);
+    final beats = [
+      0.0, 4 * _frameDur, 8 * _frameDur, 12 * _frameDur, 16 * _frameDur,
+    ];
+    // Default kernel (3) smooths the lone G into the surrounding C run.
+    expect(beatSyncChords(frames, beats, spec).map((c) => c.chord).toList(),
+        ['C']);
+    // With smoothing disabled, the raw per-beat mode keeps the G.
+    expect(
+        beatSyncChords(frames, beats, spec, beatSmoothingKernel: 1)
+            .map((c) => c.chord)
+            .toList(),
+        ['C', 'G', 'C']);
   });
 
   test('empty beats or empty frames returns empty (caller falls back)', () {

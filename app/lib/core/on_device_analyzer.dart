@@ -84,7 +84,11 @@ class OnDeviceAnalyzer {
       chords = beatTimes.isEmpty
           ? voteDecode(frames, spec)
           : beatSyncChords(frames, beatTimes, spec);
-      debugPrint('[analyze] ${beatTimes.length} beats, ${chords.length} chords');
+      // Diagnostics: bpm + beat/chord counts + the chord sequence let us tell
+      // real over-segmentation from a doubled-tempo beat grid.
+      debugPrint('[analyze] bpm=${beatResult.bpm.toStringAsFixed(1)} '
+          '${beatTimes.length} beats, ${chords.length} chords');
+      debugPrint('[analyze] chords: ${chords.map((c) => c.chord).join(' ')}');
     } finally {
       runner.dispose();
     }
