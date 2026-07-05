@@ -16,7 +16,7 @@ void main() {
   TestWidgetsFlutterBinding.ensureInitialized();
 
   group('SettingsStore', () {
-    test('defaults to chordnet_2e1d when nothing persisted', () async {
+    test('defaults to btc when nothing persisted', () async {
       SharedPreferences.setMockInitialValues({});
       final container = ProviderContainer();
       addTearDown(container.dispose);
@@ -24,7 +24,7 @@ void main() {
       await container.read(settingsStoreProvider.notifier).ready;
 
       expect(container.read(selectedChordModelProvider), defaultModelName);
-      expect(defaultModelName, 'chordnet_2e1d');
+      expect(defaultModelName, 'btc');
     });
 
     test('setChordModel persists and round-trips', () async {

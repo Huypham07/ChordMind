@@ -40,7 +40,7 @@ const fallbackFrameDur = 2048 / 22050;
 
 /// Applies the reference `majority_filter_indices` categorical majority
 /// filter to a sequence of class ids.
-List<int> _majorityFilter(List<int> values, int kernelSize) {
+List<int> majorityFilter(List<int> values, int kernelSize) {
   var kernel = kernelSize < 1 ? 1 : kernelSize;
   if (kernel % 2 == 0) kernel += 1;
   final n = values.length;
@@ -78,14 +78,89 @@ List<int> _majorityFilter(List<int> values, int kernelSize) {
   return filtered;
 }
 
+/// Absorbs chord segments shorter than [minDur] seconds into a neighbor so
+/// the timeline has no sub-[minDur] "junk" chords (e.g. a 1-frame D7 between
+/// D and G). Repeatedly takes the shortest too-short segment and merges it
+/// into its longer-duration neighbor (tie -> previous): the neighbor's label
+/// wins, its span extends to cover the gap, confidence becomes the
+/// duration-weighted mean. Applies uniformly to 'N'/'X' too. The timeline
+/// stays gap-free (every span remains covered).
+/// ponytail: O(n^2) scan, fine for song-length chord lists.
+List<Chord> mergeShortChords(List<Chord> chords, double minDur) {
+  final out = List<Chord>.of(chords);
+  while (out.length > 1) {
+    // Find the shortest segment still under the threshold.
+    var shortest = -1;
+    var shortestDur = minDur;
+    for (var i = 0; i < out.length; i++) {
+      final d = out[i].end - out[i].start;
+      if (d < shortestDur) {
+        shortest = i;
+        shortestDur = d;
+      }
+    }
+    if (shortest < 0) break; // nothing left under minDur
+
+    // Pick the longer-duration neighbor to absorb into (tie -> previous).
+    final prev = shortest > 0 ? shortest - 1 : -1;
+    final next = shortest < out.length - 1 ? shortest + 1 : -1;
+    int keep;
+    if (prev < 0) {
+      keep = next;
+    } else if (next < 0) {
+      keep = prev;
+    } else {
+      final prevDur = out[prev].end - out[prev].start;
+      final nextDur = out[next].end - out[next].start;
+      keep = nextDur > prevDur ? next : prev;
+    }
+
+    final s = out[shortest];
+    final k = out[keep];
+    final sDur = s.end - s.start;
+    final kDur = k.end - k.start;
+    final conf = (k.confidence * kDur + s.confidence * sDur) / (kDur + sDur);
+    out[keep] = Chord.fromJson({
+      'chord': k.chord,
+      'start': k.start < s.start ? k.start : s.start,
+      'end': k.end > s.end ? k.end : s.end,
+      'confidence': conf,
+    });
+    out.removeAt(shortest);
+
+    // Absorbing may leave the kept segment adjacent to an equal label; merge.
+    final ki = keep > shortest ? keep - 1 : keep;
+    for (final j in [ki + 1, ki - 1]) {
+      if (j >= 0 && j < out.length && out[j].chord == out[ki].chord) {
+        final a = out[j < ki ? j : ki];
+        final b = out[j < ki ? ki : j];
+        final aDur = a.end - a.start;
+        final bDur = b.end - b.start;
+        out[j < ki ? j : ki] = Chord.fromJson({
+          'chord': a.chord,
+          'start': a.start,
+          'end': b.end,
+          'confidence':
+              (a.confidence * aDur + b.confidence * bDur) / (aDur + bDur),
+        });
+        out.removeAt(j < ki ? ki : j);
+        break;
+      }
+    }
+  }
+  return out;
+}
+
 /// Decodes [frames] (a PCM-in "vote" model's per-frame argmax
 /// predictions) into merged [Chord] segments, smoothing single-frame
 /// flicker with a majority filter over an odd-sized [smoothingKernel]
-/// (default 5).
+/// (default 5), then absorbing segments shorter than [minChordDur] seconds
+/// into a neighbor so the timeline has no sub-[minChordDur] junk chords.
 List<Chord> voteDecode(
   List<FrameResult> frames,
   ModelSpec spec, {
   int smoothingKernel = 5,
+  double minChordDur = 0.3,
 }) {
   if (frames.isEmpty) return [];
 
@@ -95,7 +170,7 @@ List<Chord> voteDecode(
   }
 
   final classIds = [for (final f in frames) f.classId];
-  final smoothed = _majorityFilter(classIds, smoothingKernel);
+  final smoothed = majorityFilter(classIds, smoothingKernel);
 
   // frame_dur: consecutive frame time delta (0 if only one frame).
   final frameDur =
@@ -120,5 +195,5 @@ List<Chord> voteDecode(
       runStart = i;
     }
   }
-  return chords;
+  return mergeShortChords(chords, minChordDur);
 }

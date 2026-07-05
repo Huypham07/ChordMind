@@ -9,7 +9,7 @@
 // on-device today; chord_cnn_lstm (input == 'cqtv2_feature') is deferred
 // (see model_registry.dart). A persisted value that no longer resolves to
 // a usable on-device model (unknown name, or a non-pcm model like
-// chord_cnn_lstm) falls back to the default at load time.
+// chord_cnn_lstm) falls back to the registry default (btc) at load time.
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 

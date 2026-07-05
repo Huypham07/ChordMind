@@ -61,10 +61,10 @@ void main() {
     expect(m.feature!['n_bins'], 288);
   });
 
-  test('default model is chordnet_2e1d', () async {
+  test('default model is btc', () async {
     final registry = await ModelRegistry.load();
-    expect(registry.byName(null).name, 'chordnet_2e1d');
-    expect(registry.defaultModel.name, 'chordnet_2e1d');
+    expect(registry.byName(null).name, 'btc');
+    expect(registry.defaultModel.name, 'btc');
   });
 
   test('byName throws for unknown model', () async {

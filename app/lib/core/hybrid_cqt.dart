@@ -377,6 +377,22 @@ _Stft _stftComplex(
   return _Stft(nFrames, re, im);
 }
 
+/// Public hann-windowed magnitude spectrogram, reusing this module's FFT.
+/// `result[frame][freqBin]`, freqBin in [0, nFft/2]. Used by the beat
+/// tracker for its onset envelope so there is only one FFT in the app.
+List<Float64List> stftMagnitude(Float64List y, {int nFft = 2048, int hop = 512}) {
+  final window = _hannWindow(nFft);
+  final stft = _stftComplex(y, nFft, hop, window: window);
+  final out = List<Float64List>.generate(stft.nFrames, (_) => Float64List(nFft ~/ 2 + 1));
+  for (var t = 0; t < stft.nFrames; t++) {
+    final re = stft.re[t], im = stft.im[t];
+    for (var f = 0; f < re.length; f++) {
+      out[t][f] = math.sqrt(re[f] * re[f] + im[f] * im[f]);
+    }
+  }
+  return out;
+}
+
 // ---------------------------------------------------------------------
 // Iterative radix-2 Cooley-Tukey FFT (in place; n must be a power of 2).
 // ---------------------------------------------------------------------

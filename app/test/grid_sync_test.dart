@@ -30,14 +30,27 @@ AnalysisResult _empty() => AnalysisResult.fromJson({
     });
 
 void main() {
+  // Lead is small relative to the 0.5s beat spacing, so these hold for any
+  // sane calibration value; where a boundary matters we offset by the
+  // constant itself so the test tracks the knob if it's retuned.
+  const lead = chordSyncLeadSeconds;
+
   test('activeChordIndex maps position to the right synchronizedChords cell', () {
     final r = _r();
-    expect(activeChordIndex(r, 0.0), 0);   // boundary: exact start of cell 0
+    expect(activeChordIndex(r, 0.0), 0);          // start of cell 0 (lead stays inside)
     expect(activeChordIndex(r, 0.5), 0);
-    expect(activeChordIndex(r, 2.0), 1);   // boundary: exact start of cell 1
-    expect(activeChordIndex(r, 2.5), 1);
-    expect(activeChordIndex(r, 3.9), 1);   // last cell extends to duration
-    expect(activeChordIndex(r, -1.0), -1); // before first
+    expect(activeChordIndex(r, 2.5), 1);          // deep inside cell 1
+    expect(activeChordIndex(r, 3.5 - lead), 1);   // last cell extends to duration
+    expect(activeChordIndex(r, -1.0), -1);        // before first
+  });
+
+  test('sync lead moves the highlight to the next chord slightly early', () {
+    final r = _r();
+    // C→G change is at 2.0s. A hair MORE than `lead` before it, still C.
+    expect(activeChordIndex(r, 2.0 - lead - 0.02), 0);
+    // Within `lead` of the change, the highlight has already flipped to G,
+    // so the label lands on the chord you hear rather than a beat behind.
+    expect(activeChordIndex(r, 2.0 - lead + 0.02), 1);
   });
 
   test('empty synchronizedChords returns -1', () {
