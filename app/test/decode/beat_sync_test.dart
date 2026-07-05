@@ -70,6 +70,36 @@ void main() {
         ['C', 'G', 'C']);
   });
 
+  test('minChordDur absorbs a lone short chord between DIFFERENT neighbors',
+      () {
+    // labels: 0->N 1->C 2->G 3->F. C(2 beats) G(1 beat) F(3 beats). The lone
+    // 1-beat G sits between different chords, so the majority filter can't
+    // out-vote it — only the min-duration pass removes it, into the longer
+    // neighbor (F).
+    final specF = _spec(['N', 'C', 'G', 'F']);
+    final frames = _frames([
+      1, 1, 1, 1, 1, 1, 1, 1, // C, 2 beats
+      2, 2, 2, 2, // G, 1 beat (~0.37s)
+      3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, 3, // F, 3 beats
+    ]);
+    final beats = [
+      0.0, 4 * _frameDur, 8 * _frameDur,
+      12 * _frameDur, 16 * _frameDur, 20 * _frameDur,
+    ];
+    // Majority filter alone (kernel 3, no min-duration) keeps G — distinct
+    // neighbors, no majority.
+    expect(
+        beatSyncChords(frames, beats, specF).map((c) => c.chord).toList(),
+        ['C', 'G', 'F']);
+    // Min-duration (0.5s > 1 beat) absorbs the lone G into the longer F.
+    final chords = beatSyncChords(frames, beats, specF,
+        beatSmoothingKernel: 1, minChordDur: 0.5);
+    expect(chords.map((c) => c.chord).toList(), ['C', 'F']);
+    for (final c in chords) {
+      expect(c.end - c.start, greaterThanOrEqualTo(0.5));
+    }
+  });
+
   test('empty beats or empty frames returns empty (caller falls back)', () {
     expect(beatSyncChords(_frames([1, 2]), const [], spec), isEmpty);
     expect(beatSyncChords(const [], [0.0, 1.0], spec), isEmpty);

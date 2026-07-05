@@ -86,7 +86,7 @@ List<int> majorityFilter(List<int> values, int kernelSize) {
 /// duration-weighted mean. Applies uniformly to 'N'/'X' too. The timeline
 /// stays gap-free (every span remains covered).
 /// ponytail: O(n^2) scan, fine for song-length chord lists.
-List<Chord> _mergeShort(List<Chord> chords, double minDur) {
+List<Chord> mergeShortChords(List<Chord> chords, double minDur) {
   final out = List<Chord>.of(chords);
   while (out.length > 1) {
     // Find the shortest segment still under the threshold.
@@ -195,5 +195,5 @@ List<Chord> voteDecode(
       runStart = i;
     }
   }
-  return _mergeShort(chords, minChordDur);
+  return mergeShortChords(chords, minChordDur);
 }

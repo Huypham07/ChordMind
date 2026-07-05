@@ -9,13 +9,15 @@
 import '../inference/pcm_runner.dart';
 import '../model_registry.dart';
 import '../models.dart';
-import 'vote_decode.dart' show fallbackFrameDur, majorityFilter;
+import 'vote_decode.dart'
+    show fallbackFrameDur, majorityFilter, mergeShortChords;
 
 List<Chord> beatSyncChords(
   List<FrameResult> frames,
   List<double> beatTimes,
   ModelSpec spec, {
   int beatSmoothingKernel = 3,
+  double minChordDur = 0,
 }) {
   if (frames.isEmpty || beatTimes.isEmpty) return const [];
   final labels = spec.labels;
@@ -103,5 +105,9 @@ List<Chord> beatSyncChords(
       }));
     }
   }
-  return segments;
+
+  // Pass 4: absorb any still-too-short segment (a lone quality flip between
+  // DIFFERENT neighbors that the majority filter can't out-vote) into its
+  // stronger neighbor. minChordDur == 0 disables this (keeps every beat).
+  return minChordDur > 0 ? mergeShortChords(segments, minChordDur) : segments;
 }

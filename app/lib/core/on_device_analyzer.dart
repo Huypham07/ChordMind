@@ -36,6 +36,22 @@ import 'models.dart';
 const placeholderBpm = 120.0;
 const placeholderTimeSignature = 4;
 
+/// Beat-sync chords shorter than this many beats are absorbed into a stronger
+/// neighbor, so a lone 1-beat quality flip (e.g. Cmaj7 wedged between C beats)
+/// vanishes while real >=2-beat changes survive. Tempo-scaled via the beat
+/// grid, so it means the same musically at any BPM.
+/// ponytail: one calibration knob — lower it to keep more short chords, raise
+/// it to be more aggressive against flicker.
+const minChordBeats = 1.4;
+
+/// Median spacing (seconds) between consecutive [beatTimes]; 0 if under 2 beats.
+double _medianBeatSpacing(List<double> beatTimes) {
+  if (beatTimes.length < 2) return 0;
+  final d = [for (var i = 1; i < beatTimes.length; i++) beatTimes[i] - beatTimes[i - 1]]
+    ..sort();
+  return d[d.length ~/ 2];
+}
+
 class OnDeviceAnalyzer {
   OnDeviceAnalyzer({AudioSource? audioSource, this._registry})
       : audioSource = audioSource ?? AudioSource();
@@ -81,9 +97,10 @@ class OnDeviceAnalyzer {
         beatResult = const BeatResult([], 0);
       }
       final beatTimes = beatResult.beats;
+      final minChordDur = minChordBeats * _medianBeatSpacing(beatTimes);
       chords = beatTimes.isEmpty
           ? voteDecode(frames, spec)
-          : beatSyncChords(frames, beatTimes, spec);
+          : beatSyncChords(frames, beatTimes, spec, minChordDur: minChordDur);
       // Diagnostics: bpm + beat/chord counts + the chord sequence let us tell
       // real over-segmentation from a doubled-tempo beat grid.
       debugPrint('[analyze] bpm=${beatResult.bpm.toStringAsFixed(1)} '
