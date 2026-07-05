@@ -40,6 +40,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   /// file song's analysis (Task 6).
   String? get _audioPath => effectiveAudioPath(widget.audioFilePath, _r);
   bool get _fileMode => _audioPath != null;
+  /// Synchronous (doesn't need `_r` to have loaded) file-song check: true for
+  /// a fresh upload (`audioFilePath` set) and for a file song opened by id
+  /// (Home creates file ids as `'file:${basename}'`). Used to keep the
+  /// YouTube-init path from ever running for a file song — see `_initPlayer`.
+  bool get _isFileSong =>
+      widget.audioFilePath != null || widget.youtubeId.startsWith('file:');
   AnalysisResult? _r;
   bool _analysisFailed = false;
   bool _generating = false;
@@ -73,6 +79,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   Future<void> _initFilePlayer() async {
     final player = AudioPlayer();
     _audio = player;
+    // Defensive: guarantee no previous subscription (e.g. a YT one, though
+    // `_initPlayer`'s `_isFileSong` guard should already prevent that) leaks.
+    await _sub?.cancel();
     _sub = player.positionStream.listen((d) => _pos.value = d.inMilliseconds / 1000.0);
     try {
       await player.setFilePath(_audioPath!);
@@ -93,7 +102,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   }
 
   void _initPlayerWhenSettled() {
-    if (!mounted) return;
+    if (!mounted || _isFileSong) return;
     final anim = ModalRoute.of(context)?.animation;
     if (anim == null || anim.isCompleted) {
       _initPlayer();
@@ -109,7 +118,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   }
 
   void _initPlayer() {
-    if (!mounted) return;
+    // Belt-and-suspenders: a file song opened by id starts with `_fileMode ==
+    // false` (its `_audioPath` isn't known until `_r` loads), so without this
+    // guard this path would build a bogus YoutubePlayerController for
+    // `widget.youtubeId` (e.g. "file:a.mp3") and leak its `_sub` once
+    // `_maybeInitFilePlayer` reassigns `_sub` for the real audio player.
+    if (!mounted || _isFileSong) return;
     try {
       _yt = YoutubePlayerController.fromVideoId(
           videoId: widget.youtubeId,
