@@ -52,7 +52,7 @@ class OnDeviceAnalyzer {
   ///
   /// [modelName] selects which chord model (see `ModelRegistry`) to run;
   /// `null` (the default) resolves to the registry's default model
-  /// (chordnet_2e1d). Callers pass the user's `settings_store.dart`
+  /// (btc). Callers pass the user's `settings_store.dart`
   /// selection here.
   /// [audioFilePath], when given, decodes that LOCAL audio file instead of
   /// fetching from YouTube (fallback for rate-limiting / non-YouTube audio).

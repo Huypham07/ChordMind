@@ -30,7 +30,7 @@ class DefaultSongRepository implements SongRepository {
   /// Reads the currently-selected chord model name (see
   /// `settings_store.dart`) at generate()-call time, so a later selection
   /// change is honored without rebuilding the repository. Defaults to
-  /// always returning the registry default (chordnet_2e1d).
+  /// always returning the registry default (btc).
   final String Function() _selectedChordModel;
 
   DefaultSongRepository(this._api, this._local,

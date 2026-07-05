@@ -23,6 +23,9 @@ class DspBeatTracker implements BeatTracker {
 
   @override
   BeatResult track(Float32List pcm, {double sr = 22050}) {
+    // The onset pipeline (onsetEnvelope/onsetFps) is fixed to 22050 Hz / hop
+    // 512; passing another rate would silently produce wrong beat times.
+    assert(sr == 22050, 'DspBeatTracker onset pipeline assumes sr == 22050');
     final onset = onsetEnvelope(pcm);
     final bpm = estimateTempo(onset);
     if (bpm <= 0) return const BeatResult([], 0);
@@ -44,9 +47,12 @@ class DspBeatTracker implements BeatTracker {
     final backlink = List<int>.filled(n, -1);
     final cumscore = List<double>.filled(n, 0);
 
-    // Predecessor window: offsets [-2*period, -period/2].
+    // Predecessor window: offsets [-2*period, -period/2]. Clamp the high
+    // offset to -1 so a predecessor is always strictly earlier (guards the
+    // degenerate period < 2 case, where round(-period/2) could reach 0 and
+    // let a frame pick itself).
     final loOff = (-2 * period).round();
-    final hiOff = (-period / 2).round();
+    final hiOff = math.min((-period / 2).round(), -1);
 
     for (var i = 0; i < n; i++) {
       var bestScore = double.negativeInfinity;
