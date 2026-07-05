@@ -19,6 +19,8 @@ List<Chord> beatSyncChords(
     throw ArgumentError('${spec.name} has no labels in its manifest entry');
   }
 
+  final nIndex = labels.indexOf('N'); // -1 if absent
+
   final frameDur =
       frames.length > 1 ? frames[1].time - frames[0].time : fallbackFrameDur;
   final songEnd = frames.last.time + frameDur;
@@ -51,7 +53,7 @@ List<Chord> beatSyncChords(
     double conf;
     if (counts.isEmpty) {
       // Empty interval: inherit the previous chord (or N for the first).
-      winner = prevClass >= 0 ? prevClass : 0;
+      winner = prevClass >= 0 ? prevClass : (nIndex >= 0 ? nIndex : 0);
       conf = 0.0;
     } else {
       winner = counts.keys.first;

@@ -49,4 +49,22 @@ void main() {
     expect(beatSyncChords(_frames([1, 2]), const [], spec), isEmpty);
     expect(beatSyncChords(const [], [0.0, 1.0], spec), isEmpty);
   });
+
+  test('empty first interval falls back to the real N label, not labels[0]',
+      () {
+    // labels: 0->C, 1->G, 2->N (N is deliberately NOT at index 0).
+    final specNNotFirst = _spec(['C', 'G', 'N']);
+    // All frames start at frame index 2 (time = 2*_frameDur), so the lead-in
+    // interval [0, 2*_frameDur) — created because beatTimes.first > 0 — has
+    // no frames in it and must fall back to 'N', not labels[0] ('C').
+    final frames = [
+      for (var i = 2; i < 6; i++)
+        FrameResult(frameIndex: i, classId: 0, confidence: 1.0, time: i * _frameDur),
+    ];
+    final beats = [2 * _frameDur, 6 * _frameDur];
+    final chords = beatSyncChords(frames, beats, specNNotFirst);
+    expect(chords.first.chord, 'N');
+    expect(chords.first.start, 0.0);
+    expect(chords.first.end, closeTo(2 * _frameDur, 1e-9));
+  });
 }
