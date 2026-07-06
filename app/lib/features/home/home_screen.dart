@@ -30,6 +30,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   List<StoredSong> _local = [];
   List<YtResult> _yt = [];
   bool _searchingYt = false;
+  String? _ytError;
   Timer? _debounce;
 
   @override
@@ -53,6 +54,7 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
       setState(() {
         _local = [];
         _yt = [];
+        _ytError = null;
       });
       return;
     }
@@ -61,18 +63,26 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
     setState(() {
       _local = results;
       _yt = [];
+      _ytError = null;
     });
   }
 
   Future<void> _searchYoutube() async {
     final query = _query;
-    setState(() => _searchingYt = true);
-    final results = await ref.read(songSearchProvider).searchYoutube(query);
-    if (!mounted || query != _query) return;
     setState(() {
-      _yt = results;
-      _searchingYt = false;
+      _searchingYt = true;
+      _ytError = null;
     });
+    try {
+      final results = await ref.read(songSearchProvider).searchYoutube(query);
+      if (!mounted || query != _query) return;
+      setState(() => _yt = results);
+    } catch (_) {
+      if (!mounted || query != _query) return;
+      setState(() => _ytError = 'Không tìm được trên YouTube');
+    } finally {
+      if (mounted) setState(() => _searchingYt = false);
+    }
   }
 
   @override
@@ -186,6 +196,14 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.lg)),
               ),
             ),
+          ],
+          if (_ytError != null) ...[
+            const SizedBox(height: AppSpace.s8),
+            Text(_ytError!,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Theme.of(context).colorScheme.error)),
           ],
           if (_yt.isNotEmpty) ...[
             const SizedBox(height: AppSpace.s16),
