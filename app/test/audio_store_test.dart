@@ -38,4 +38,16 @@ void main() {
     expect(stored2, stored);
     expect(File(stored2).readAsBytesSync(), [9]);
   });
+
+  test('distinct ids that sanitize to the same base do not collide', () async {
+    final a = File(p.join(tmp.path, 'a.mp3'))..writeAsBytesSync(Uint8List.fromList([1]));
+    final b = File(p.join(tmp.path, 'b.mp3'))..writeAsBytesSync(Uint8List.fromList([2]));
+    // "a-b" and "a b" both sanitize to base "a_b"; the id-hash suffix keeps
+    // them separate so one upload never overwrites the other's audio.
+    final sa = await AudioStore().persist('file:a-b.mp3', a.path);
+    final sb = await AudioStore().persist('file:a b.mp3', b.path);
+    expect(sa, isNot(sb));
+    expect(File(sa).readAsBytesSync(), [1]);
+    expect(File(sb).readAsBytesSync(), [2]);
+  });
 }

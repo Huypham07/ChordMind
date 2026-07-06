@@ -170,7 +170,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppSpace.s12),
                   child: AppCard(
-                    onTap: () => context.push('/player/${s.youtubeId}'),
+                    onTap: () =>
+                        context.push('/player/${Uri.encodeComponent(s.youtubeId)}'),
                     child: Row(children: [
                       Expanded(
                         child: Text(s.title,
@@ -212,7 +213,8 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
                 Padding(
                   padding: const EdgeInsets.only(bottom: AppSpace.s12),
                   child: AppCard(
-                    onTap: () => context.push('/player/${r.videoId}'),
+                    onTap: () =>
+                        context.push('/player/${Uri.encodeComponent(r.videoId)}'),
                     child: Row(children: [
                       Expanded(
                         child: Column(
