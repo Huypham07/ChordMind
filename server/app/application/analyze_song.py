@@ -16,3 +16,11 @@ class AnalyzeSong:
         result = self._slot.run(youtube_id, title, duration)
         self._repo.save(result)
         return result
+
+    def analyze_file(self, song_id: str, title: str, audio_path: str) -> AnalysisResult:
+        cached = self._repo.get(song_id)
+        if cached:
+            return cached
+        result = self._slot.run_file(song_id, title, audio_path)
+        self._repo.save(result)
+        return result
