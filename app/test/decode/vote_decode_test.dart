@@ -4,7 +4,6 @@
 // and merges consecutive equal smoothed labels into Chord segments.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chordmind/core/model_registry.dart';
-import 'package:chordmind/core/models.dart';
 import 'package:chordmind/core/inference/pcm_runner.dart';
 import 'package:chordmind/core/decode/vote_decode.dart';
 
@@ -146,7 +145,9 @@ void main() {
     // C x5, X x1 (junk), G x5. X spans ~0.093s < 0.3 default -> absorbed.
     // Neighbors C(5) and G(5) tie -> previous (C) wins.
     final frames = _frames([1, 1, 1, 1, 1, 3, 2, 2, 2, 2, 2]);
-    final chords = voteDecode(frames, spec, smoothingKernel: 1);
+    // Absorption mechanics tested at an explicit 0.3s threshold (independent
+    // of the vote default). X spans ~0.093s -> absorbed; C(5)/G(5) tie -> C.
+    final chords = voteDecode(frames, spec, smoothingKernel: 1, minChordDur: 0.3);
     expect(chords.map((c) => c.chord).toList(), ['C', 'G']);
     // Invariant: no segment shorter than the threshold survives.
     for (final c in chords) {

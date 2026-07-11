@@ -1,10 +1,12 @@
 // app/lib/features/home/home_screen.dart
+import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:go_router/go_router.dart';
 import 'package:path/path.dart' as p;
 import 'package:chordmind/core/youtube.dart';
+import 'package:chordmind/core/search/song_search.dart';
 import 'package:chordmind/core/theme.dart';
 import 'package:chordmind/core/breakpoints.dart';
 import 'package:chordmind/core/nav_helper.dart';
@@ -24,8 +26,69 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
   final _ctrl = TextEditingController();
   String? _pickedFilePath; // selected local mp3, shown until Analyze is pressed
 
+  String _query = '';
+  List<StoredSong> _local = [];
+  List<YtResult> _yt = [];
+  bool _searchingYt = false;
+  String? _ytError;
+  Timer? _debounce;
+
+  @override
+  void initState() {
+    super.initState();
+    _ctrl.addListener(_onQueryChanged);
+  }
+
+  void _onQueryChanged() {
+    final text = _ctrl.text;
+    if (text == _query) return;
+    _query = text;
+    _debounce?.cancel();
+    _debounce = Timer(const Duration(milliseconds: 300), _runLocalSearch);
+  }
+
+  Future<void> _runLocalSearch() async {
+    final query = _query;
+    if (query.trim().isEmpty || parseYoutubeId(query) != null) {
+      if (!mounted) return;
+      setState(() {
+        _local = [];
+        _yt = [];
+        _ytError = null;
+      });
+      return;
+    }
+    final results = await ref.read(songSearchProvider).searchLocal(query);
+    if (!mounted || query != _query) return;
+    setState(() {
+      _local = results;
+      _yt = [];
+      _ytError = null;
+    });
+  }
+
+  Future<void> _searchYoutube() async {
+    final query = _query;
+    setState(() {
+      _searchingYt = true;
+      _ytError = null;
+    });
+    try {
+      final results = await ref.read(songSearchProvider).searchYoutube(query);
+      if (!mounted || query != _query) return;
+      setState(() => _yt = results);
+    } catch (_) {
+      if (!mounted || query != _query) return;
+      setState(() => _ytError = 'Không tìm được trên YouTube');
+    } finally {
+      if (mounted) setState(() => _searchingYt = false);
+    }
+  }
+
   @override
   void dispose() {
+    _debounce?.cancel();
+    _ctrl.removeListener(_onQueryChanged);
     _ctrl.dispose();
     super.dispose();
   }
@@ -100,6 +163,79 @@ class _HomeScreenState extends ConsumerState<HomeScreen> {
               shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.lg)),
             ),
           ),
+          if (_local.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.s24),
+            Column(children: [
+              for (final s in _local)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpace.s12),
+                  child: AppCard(
+                    onTap: () =>
+                        context.push('/player/${Uri.encodeComponent(s.youtubeId)}'),
+                    child: Row(children: [
+                      Expanded(
+                        child: Text(s.title,
+                            maxLines: 1,
+                            overflow: TextOverflow.ellipsis,
+                            style: Theme.of(context).textTheme.titleMedium),
+                      ),
+                      const SizedBox(width: AppSpace.s12),
+                      const InfoChip(label: 'Đã có hợp âm'),
+                    ]),
+                  ),
+                ),
+            ]),
+          ],
+          if (parseYoutubeId(_query) == null && _query.trim().isNotEmpty) ...[
+            const SizedBox(height: AppSpace.s12),
+            OutlinedButton.icon(
+              onPressed: _searchingYt ? null : _searchYoutube,
+              icon: const Icon(Icons.ondemand_video_rounded),
+              label: Text(_searchingYt ? 'Đang tìm…' : 'Tìm trên YouTube'),
+              style: OutlinedButton.styleFrom(
+                minimumSize: const Size.fromHeight(52),
+                shape: RoundedRectangleBorder(borderRadius: BorderRadius.circular(AppRadii.lg)),
+              ),
+            ),
+          ],
+          if (_ytError != null) ...[
+            const SizedBox(height: AppSpace.s8),
+            Text(_ytError!,
+                style: Theme.of(context)
+                    .textTheme
+                    .bodySmall
+                    ?.copyWith(color: Theme.of(context).colorScheme.error)),
+          ],
+          if (_yt.isNotEmpty) ...[
+            const SizedBox(height: AppSpace.s16),
+            Column(children: [
+              for (final r in _yt)
+                Padding(
+                  padding: const EdgeInsets.only(bottom: AppSpace.s12),
+                  child: AppCard(
+                    onTap: () =>
+                        context.push('/player/${Uri.encodeComponent(r.videoId)}'),
+                    child: Row(children: [
+                      Expanded(
+                        child: Column(
+                          crossAxisAlignment: CrossAxisAlignment.start,
+                          children: [
+                            Text(r.title,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.titleMedium),
+                            Text(r.author,
+                                maxLines: 1,
+                                overflow: TextOverflow.ellipsis,
+                                style: Theme.of(context).textTheme.bodySmall),
+                          ],
+                        ),
+                      ),
+                    ]),
+                  ),
+                ),
+            ]),
+          ],
           const SizedBox(height: AppSpace.s32),
           Text('Gần đây', style: Theme.of(context).textTheme.titleLarge),
           const SizedBox(height: AppSpace.s12),

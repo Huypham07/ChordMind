@@ -3,6 +3,7 @@ import 'dart:convert';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:shared_preferences/shared_preferences.dart';
 import 'models.dart';
+import 'search/song_search.dart';
 
 /// On-device store of analyses, keyed by youtubeId. Kept as raw JSON so we never
 /// need per-model toJson, and so a future server sync can push the stored map
@@ -24,6 +25,29 @@ class LocalStore {
   Future<void> save(String youtubeId, Map<String, dynamic> json) async {
     final p = await SharedPreferences.getInstance();
     await p.setString('$_prefix$youtubeId', jsonEncode(json));
+  }
+
+  /// Every stored analysis as a lightweight [StoredSong], for search/recents.
+  /// Corrupt entries are skipped rather than throwing.
+  Future<List<StoredSong>> all() async {
+    final p = await SharedPreferences.getInstance();
+    final out = <StoredSong>[];
+    for (final key in p.getKeys()) {
+      if (!key.startsWith(_prefix)) continue;
+      final raw = p.getString(key);
+      if (raw == null) continue;
+      try {
+        final src = (jsonDecode(raw) as Map)['source'] as Map;
+        out.add(StoredSong(
+          src['youtubeId'] as String,
+          src['title'] as String,
+          src['audioPath'] as String?,
+        ));
+      } catch (_) {
+        // Skip unreadable/legacy entries.
+      }
+    }
+    return out;
   }
 }
 

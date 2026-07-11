@@ -7,6 +7,9 @@ class ModelSlot(ABC):
     @abstractmethod
     def run(self, youtube_id: str, title: str, duration: float) -> AnalysisResult: ...
 
+    def run_file(self, song_id: str, title: str, audio_path: str) -> AnalysisResult:
+        raise NotImplementedError
+
 
 class SongRepository(ABC):
     """Port for persistence. Implemented in infrastructure; faked in use-case tests."""

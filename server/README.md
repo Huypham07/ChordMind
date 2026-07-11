@@ -1,7 +1,20 @@
 # ChordMind server
 
 API (FastAPI + Postgres) lưu/cache kết quả phân tích bài hát (`AnalysisResult`), quản lý
-version & vote. Phân tích AI chạy trên thiết bị; server chỉ lưu (không cần GPU).
+version & vote. **Web/desktop phân tích server-side** (upload file → chạy ONNX ngay trên
+server); **mobile phân tích on-device**. Hai đường dùng chung một đặc tả decode/smoothing,
+giữ parity (bản Python trong `app/infrastructure/analysis/` mirror pipeline Dart
+`OnDeviceAnalyzer`).
+
+## Model ONNX (bắt buộc trước khi phân tích server-side)
+
+File `.onnx` bị gitignore — sinh từ checkpoint trong `reference/` (một lần):
+
+```bash
+pip install -r ../scripts/export/requirements.txt   # torch>=2.2,<2.9 (2.9+ dynamo exporter lỗi)
+python -m scripts.export btc                          # → artifacts/onnx/btc.onnx (mặc định)
+python -m scripts.export chordnet_2e1d
+```
 
 ## Yêu cầu
 
@@ -34,6 +47,7 @@ Bật Postgres: `docker compose -f ../docker-compose.infra.yml up -d`.
 | Method | Path                  | Mô tả                                                                      |
 | ------ | --------------------- | -------------------------------------------------------------------------- |
 | GET    | `/health`             | kiểm tra sống → `{"status":"ok"}`                                          |
-| POST   | `/songs`              | body `{"url"}` (link YouTube) → `AnalysisResult`; 400 nếu URL không hợp lệ |
+| POST   | `/songs`              | body `{"url"}` (link YouTube) → `AnalysisResult` (stub; YouTube ingest chưa bật) |
+| POST   | `/songs/analyze-file` | upload file audio (multipart `file`, `title`) → chạy ONNX thật → `AnalysisResult` |
 | GET    | `/songs/{youtube_id}` | lấy `AnalysisResult` đã lưu, hoặc 404                                      |
 | GET    | `/songs`              | danh sách bài gần đây `[{youtubeId, title}]`                               |

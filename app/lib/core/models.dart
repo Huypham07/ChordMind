@@ -4,12 +4,14 @@ class Source {
   final String youtubeId, title;
   final double duration, bpm;
   final int timeSignature;
+  final String? audioPath;
   Source.fromJson(Map j)
       : youtubeId = j['youtubeId'],
         title = j['title'],
         duration = (j['duration'] as num).toDouble(),
         bpm = (j['bpm'] as num).toDouble(),
-        timeSignature = j['timeSignature'];
+        timeSignature = j['timeSignature'],
+        audioPath = j['audioPath'] as String?;
 }
 
 class Beat {

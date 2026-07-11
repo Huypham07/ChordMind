@@ -2,11 +2,13 @@
 import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path/path.dart' as p;
 import 'package:youtube_player_iframe/youtube_player_iframe.dart' hide PlayerState;
 import 'package:chordmind/core/models.dart';
+import 'package:chordmind/core/playback_clock.dart';
 import 'package:chordmind/core/song_repository.dart';
 import 'package:chordmind/core/theme.dart';
 import 'package:chordmind/core/breakpoints.dart';
@@ -18,6 +20,7 @@ import 'package:chordmind/core/widgets/empty_state.dart';
 import 'package:chordmind/features/chord_grid/chord_timeline.dart';
 import 'package:chordmind/features/chord_grid/current_chord_bar.dart';
 import 'package:chordmind/features/diagrams/chord_diagram_sheet.dart';
+import 'effective_audio_path.dart';
 
 class PlayerScreen extends ConsumerStatefulWidget {
   final String youtubeId;
@@ -30,11 +33,22 @@ class PlayerScreen extends ConsumerStatefulWidget {
   ConsumerState<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends ConsumerState<PlayerScreen> {
+class _PlayerScreenState extends ConsumerState<PlayerScreen>
+    with SingleTickerProviderStateMixin {
   YoutubePlayerController? _yt;
   AudioPlayer? _audio;
   StreamSubscription? _sub;
-  bool get _fileMode => widget.audioFilePath != null;
+  /// The local audio file to play/analyze: the router-provided path (fresh
+  /// upload) if present, else the persisted path recorded on a re-opened
+  /// file song's analysis (Task 6).
+  String? get _audioPath => effectiveAudioPath(widget.audioFilePath, _r);
+  bool get _fileMode => _audioPath != null;
+  /// Synchronous (doesn't need `_r` to have loaded) file-song check: true for
+  /// a fresh upload (`audioFilePath` set) and for a file song opened by id
+  /// (Home creates file ids as `'file:${basename}'`). Used to keep the
+  /// YouTube-init path from ever running for a file song — see `_initPlayer`.
+  bool get _isFileSong =>
+      widget.audioFilePath != null || widget.youtubeId.startsWith('file:');
   AnalysisResult? _r;
   bool _analysisFailed = false;
   bool _generating = false;
@@ -42,6 +56,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   // the chord widgets rebuild on each tick, not the whole screen (incl. the
   // WebView) — that was making the video controls feel laggy.
   final _pos = ValueNotifier<double>(0);
+  final _clock = PlaybackClock();
+  Ticker? _ticker;
+  StreamSubscription? _playingSub; // just_audio playing-state
+  double _lastYtPos = -1;          // YouTube playing derived from advancement
+  bool _audioPlaying = false;
   int _tab = 0;
   int _transpose = 0;
   String? _selectedChord;
@@ -61,6 +80,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       // the video slot shows a placeholder until then, so the transition stays smooth.
       WidgetsBinding.instance.addPostFrameCallback((_) => _initPlayerWhenSettled());
     }
+    _ticker = createTicker((_) {
+      _pos.value = _clock.estimate(DateTime.now());
+    })..start();
   }
 
   /// File mode: load the local audio into just_audio and drive the beat cursor
@@ -68,17 +90,35 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   Future<void> _initFilePlayer() async {
     final player = AudioPlayer();
     _audio = player;
-    _sub = player.positionStream.listen((d) => _pos.value = d.inMilliseconds / 1000.0);
+    // Defensive: guarantee no previous subscription (e.g. a YT one, though
+    // `_initPlayer`'s `_isFileSong` guard should already prevent that) leaks.
+    await _sub?.cancel();
+    _playingSub = player.playingStream.listen((p) => _audioPlaying = p);
+    _sub = player.positionStream.listen((d) {
+      final pos = d.inMilliseconds / 1000.0;
+      _clock.anchor(pos, playing: _audioPlaying);
+      _pos.value = _clock.estimate(DateTime.now()); // floor if frames aren't pumping (tests)
+    });
     try {
-      await player.setFilePath(widget.audioFilePath!);
+      await player.setFilePath(_audioPath!);
       if (mounted) setState(() {});
     } catch (e) {
       debugPrint('file player load failed: $e');
     }
   }
 
+  /// Opened-by-id file songs have no `widget.audioFilePath` (no router
+  /// `extra`), so file playback can't start in `initState` — `_audioPath`
+  /// only becomes available once the persisted analysis (`_r`) loads. Called
+  /// after every `_r` update; a no-op once `_audio` exists (covers the
+  /// fresh-upload case, where `_initFilePlayer` already ran synchronously
+  /// from `initState`, and repeat analysis loads/regenerates).
+  void _maybeInitFilePlayer() {
+    if (_audio == null && _audioPath != null) _initFilePlayer();
+  }
+
   void _initPlayerWhenSettled() {
-    if (!mounted) return;
+    if (!mounted || _isFileSong) return;
     final anim = ModalRoute.of(context)?.animation;
     if (anim == null || anim.isCompleted) {
       _initPlayer();
@@ -94,7 +134,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   }
 
   void _initPlayer() {
-    if (!mounted) return;
+    // Belt-and-suspenders: a file song opened by id starts with `_fileMode ==
+    // false` (its `_audioPath` isn't known until `_r` loads), so without this
+    // guard this path would build a bogus YoutubePlayerController for
+    // `widget.youtubeId` (e.g. "file:a.mp3") and leak its `_sub` once
+    // `_maybeInitFilePlayer` reassigns `_sub` for the real audio player.
+    if (!mounted || _isFileSong) return;
     try {
       _yt = YoutubePlayerController.fromVideoId(
           videoId: widget.youtubeId,
@@ -102,7 +147,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           // songs — we only ever want this one video.
           params: const YoutubePlayerParams(showControls: true, strictRelatedVideos: true));
       _sub = _yt!.videoStateStream.listen((s) {
-        _pos.value = s.position.inMilliseconds / 1000.0;
+        final pos = s.position.inMilliseconds / 1000.0;
+        final playing = pos > _lastYtPos + 1e-3; // advanced since last tick => playing
+        _lastYtPos = pos;
+        _clock.anchor(pos, playing: playing);
+        _pos.value = _clock.estimate(DateTime.now());
       });
       setState(() {}); // swap the placeholder for the real player
     } catch (_) {
@@ -117,16 +166,25 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   Future<void> _loadAnalysis() async {
     try {
       final r = await ref.read(songRepositoryProvider).get(widget.youtubeId);
-      if (mounted) setState(() => _r = r);
+      if (mounted) {
+        setState(() => _r = r);
+        _syncClockDuration();
+        _maybeInitFilePlayer();
+      }
     } catch (_) {
       if (mounted) setState(() => _analysisFailed = true);
     }
   }
 
+  void _syncClockDuration() {
+    final d = _r?.source.duration;
+    if (d != null) _clock.duration = d;
+  }
+
   /// No analysis on server or on-device → build a placeholder, save it locally,
   /// and show it. Lets us play along offline until the real analyzer lands.
   // Re-analyze: in file mode re-run on the same local file; otherwise via YouTube.
-  Future<void> _generate() => _runGenerate(audioFilePath: widget.audioFilePath);
+  Future<void> _generate() => _runGenerate(audioFilePath: _audioPath);
 
   /// Fallback: pick a local audio file (mp3/m4a/…) and analyze it through the
   /// same on-device pipeline. Useful when YouTube extraction is rate-limited.
@@ -149,6 +207,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           _analysisFailed = false;
           _generating = false;
         });
+        _syncClockDuration();
+        _maybeInitFilePlayer();
       }
     } catch (e, st) {
       // Surface analysis failures instead of silently hanging the button
@@ -175,6 +235,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     _yt?.close();
     _audio?.dispose();
     _pos.dispose();
+    _ticker?.dispose();
+    _playingSub?.cancel();
     super.dispose();
   }
 
@@ -271,7 +333,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
 
   Widget _audioCard() {
     final audio = _audio;
-    final name = p.basename(widget.audioFilePath!);
+    final name = p.basename(_audioPath!);
     return Padding(
       padding: const EdgeInsets.all(AppSpace.s16),
       child: Container(
