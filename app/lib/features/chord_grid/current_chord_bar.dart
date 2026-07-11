@@ -2,6 +2,7 @@ import 'package:flutter/material.dart';
 import 'package:chordmind/core/models.dart';
 import 'package:chordmind/core/theme.dart';
 import 'package:chordmind/core/transpose.dart';
+import 'package:chordmind/features/chord_grid/grid_sync.dart';
 
 class CurrentChordBar extends StatelessWidget {
   final AnalysisResult result;
@@ -23,7 +24,8 @@ class CurrentChordBar extends StatelessWidget {
       final lbl = shortChord(transposeChord(c.chord, semitones, key: songKey));
       if (lbl.isNotEmpty) segs.add((label: lbl, start: c.start, end: c.end));
     }
-    final i = segs.indexWhere((s) => positionSeconds >= s.start && positionSeconds < s.end);
+    final p = positionSeconds + chordSyncLeadSeconds;
+    final i = segs.indexWhere((s) => p >= s.start && p < s.end);
     final current = i >= 0 ? segs[i].label : '—';
     final next = (i >= 0 && i + 1 < segs.length) ? segs[i + 1].label : null;
     return Container(
