@@ -8,9 +8,9 @@ Nền tảng âm nhạc cộng tác cho người chơi nhạc / ban nhạc khôn
 - Mô hình "Wikipedia hợp âm": mỗi bài phân tích một lần, lưu lại và dùng chung cho cộng đồng.
 - Biến tấu vòng hợp âm bằng AI **trên thiết bị** (đổi tone / style) — *đang phát triển*.
 - Đồng bộ ban nhạc real-time qua WebRTC + Ableton Link — *đang phát triển*.
-- Giao diện sáng/tối, mobile-first; có bản web (web chỉ **xem** bài đã phân tích, không phân tích).
+- Giao diện sáng/tối, mobile-first; **web/desktop** phân tích server-side (upload file), **mobile** phân tích on-device.
 
-> Phân tích AI chạy trên thiết bị người dùng; server chỉ lưu/cache kết quả (không cần GPU).
+> Web/desktop gọi server chạy ONNX; mobile chạy on-device. Hai đường giữ parity (decode/smoothing chung một đặc tả). Xem `server/README.md` (bước sinh ONNX + `POST /songs/analyze-file`).
 > Thiết kế & kiến trúc chi tiết: `docs/superpowers/specs/` · kế hoạch: `docs/superpowers/plans/`.
 
 ## Yêu cầu
@@ -54,5 +54,6 @@ python -m scripts.export chordnet_2e1d   # -> artifacts/onnx/{chordnet_2e1d.onnx
 
 ## Trạng thái
 
-- **A0 (xong):** nhập YouTube → hiển thị chord grid + thế bấm + theme. Model hiện là **stub** (làm app trước, model sau).
+- **A0 (xong):** nhập YouTube → hiển thị chord grid + thế bấm + theme.
+- **Phân tích thật (xong):** pipeline ONNX on-device (mobile) + server-side (web/desktop, `POST /songs/analyze-file`), parity Python↔Dart.
 - **A1 / A2 / A3** (model thật on-device, đồng bộ ban nhạc, versioning + vote): đang theo lộ trình.
