@@ -1,4 +1,4 @@
-torch>=2.2
+torch>=2.2,<2.9  # 2.9+ dynamo exporter fails to export btc (onnx_ir buffer-naming)
 nnAudio>=0.3.2
 onnx>=1.16
 onnxruntime>=1.18

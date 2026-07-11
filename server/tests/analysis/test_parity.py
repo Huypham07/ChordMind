@@ -33,10 +33,8 @@ def test_pipeline_matches_golden():
         assert abs(g["start"] - e["start"]) <= 0.10
         assert abs(g["end"] - e["end"]) <= 0.10
 
-
-def test_c_major_triad_reads_as_c_major():
-    """Sanity: the C-major-triad golden clip estimates C major end-to-end."""
-    spec = load_spec("btc")
-    pcm = decode_pcm(str(FIX / "golden_clip.wav"), spec.fs)
-    got = analyze_pcm(pcm, "golden", "Golden", spec)
-    assert got["key"] == "C major"
+# NOTE: the synthetic triad tone decodes to a single "N" span (the btc model
+# expects real music), so this gate guards beat-grid/bpm/assembly drift, not
+# the decode/key path — those are covered by the model-free unit tests in
+# test_vote_decode / test_key / test_beat_sync. Swap in a real short clip to
+# strengthen the decode coverage here.

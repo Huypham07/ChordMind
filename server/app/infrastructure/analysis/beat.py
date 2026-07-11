@@ -59,6 +59,8 @@ def _dp_beats(localscore, period, tightness=100.0):
         return []
     backlink = [-1] * n
     cumscore = [0.0] * n
+    # ponytail: Python round() is half-to-even vs Dart's half-away-from-zero;
+    # args here are float-derived so an exact .5 tie is effectively unreachable.
     lo_off = round(-2 * period)
     hi_off = min(round(-period / 2), -1)
     for i in range(n):
