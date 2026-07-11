@@ -63,7 +63,7 @@ def merge_short_chords(chords: list[Chord], min_dur: float) -> list[Chord]:
     return out
 
 def vote_decode(frames: list[Frame], spec: ModelSpec,
-                smoothing_kernel: int = 5, min_chord_dur: float = 0.3) -> list[Chord]:
+                smoothing_kernel: int = 5, min_chord_dur: float = 0.5) -> list[Chord]:
     if not frames:
         return []
     labels = spec.labels

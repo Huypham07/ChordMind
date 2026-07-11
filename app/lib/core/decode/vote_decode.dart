@@ -155,12 +155,13 @@ List<Chord> mergeShortChords(List<Chord> chords, double minDur) {
 /// predictions) into merged [Chord] segments, smoothing single-frame
 /// flicker with a majority filter over an odd-sized [smoothingKernel]
 /// (default 5), then absorbing segments shorter than [minChordDur] seconds
-/// into a neighbor so the timeline has no sub-[minChordDur] junk chords.
+/// (default 0.5) into a neighbor so the timeline has no sub-[minChordDur]
+/// junk chords.
 List<Chord> voteDecode(
   List<FrameResult> frames,
   ModelSpec spec, {
   int smoothingKernel = 5,
-  double minChordDur = 0.3,
+  double minChordDur = 0.5,
 }) {
   if (frames.isEmpty) return [];
 
