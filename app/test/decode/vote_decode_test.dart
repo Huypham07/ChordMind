@@ -4,7 +4,6 @@
 // and merges consecutive equal smoothed labels into Chord segments.
 import 'package:flutter_test/flutter_test.dart';
 import 'package:chordmind/core/model_registry.dart';
-import 'package:chordmind/core/models.dart';
 import 'package:chordmind/core/inference/pcm_runner.dart';
 import 'package:chordmind/core/decode/vote_decode.dart';
 
