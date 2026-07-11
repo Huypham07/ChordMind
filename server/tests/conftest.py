@@ -13,6 +13,7 @@ from app.infrastructure.analysis.manifest import load_spec, onnx_path
 
 _ONNX_TESTS = {
     "test_onnx_infer", "test_assemble", "test_parity", "test_analyze_file_endpoint",
+    "test_denoise_gate",
 }
 
 
