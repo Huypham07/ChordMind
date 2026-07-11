@@ -2,11 +2,13 @@
 import 'dart:async';
 import 'package:file_picker/file_picker.dart';
 import 'package:flutter/material.dart';
+import 'package:flutter/scheduler.dart';
 import 'package:flutter_riverpod/flutter_riverpod.dart';
 import 'package:just_audio/just_audio.dart';
 import 'package:path/path.dart' as p;
 import 'package:youtube_player_iframe/youtube_player_iframe.dart' hide PlayerState;
 import 'package:chordmind/core/models.dart';
+import 'package:chordmind/core/playback_clock.dart';
 import 'package:chordmind/core/song_repository.dart';
 import 'package:chordmind/core/theme.dart';
 import 'package:chordmind/core/breakpoints.dart';
@@ -31,7 +33,8 @@ class PlayerScreen extends ConsumerStatefulWidget {
   ConsumerState<PlayerScreen> createState() => _PlayerScreenState();
 }
 
-class _PlayerScreenState extends ConsumerState<PlayerScreen> {
+class _PlayerScreenState extends ConsumerState<PlayerScreen>
+    with SingleTickerProviderStateMixin {
   YoutubePlayerController? _yt;
   AudioPlayer? _audio;
   StreamSubscription? _sub;
@@ -53,6 +56,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
   // the chord widgets rebuild on each tick, not the whole screen (incl. the
   // WebView) — that was making the video controls feel laggy.
   final _pos = ValueNotifier<double>(0);
+  final _clock = PlaybackClock();
+  Ticker? _ticker;
+  StreamSubscription? _playingSub; // just_audio playing-state
+  double _lastYtPos = -1;          // YouTube playing derived from advancement
+  bool _audioPlaying = false;
   int _tab = 0;
   int _transpose = 0;
   String? _selectedChord;
@@ -72,6 +80,9 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       // the video slot shows a placeholder until then, so the transition stays smooth.
       WidgetsBinding.instance.addPostFrameCallback((_) => _initPlayerWhenSettled());
     }
+    _ticker = createTicker((_) {
+      _pos.value = _clock.estimate(DateTime.now());
+    })..start();
   }
 
   /// File mode: load the local audio into just_audio and drive the beat cursor
@@ -82,7 +93,12 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     // Defensive: guarantee no previous subscription (e.g. a YT one, though
     // `_initPlayer`'s `_isFileSong` guard should already prevent that) leaks.
     await _sub?.cancel();
-    _sub = player.positionStream.listen((d) => _pos.value = d.inMilliseconds / 1000.0);
+    _playingSub = player.playingStream.listen((p) => _audioPlaying = p);
+    _sub = player.positionStream.listen((d) {
+      final pos = d.inMilliseconds / 1000.0;
+      _clock.anchor(pos, playing: _audioPlaying);
+      _pos.value = _clock.estimate(DateTime.now()); // floor if frames aren't pumping (tests)
+    });
     try {
       await player.setFilePath(_audioPath!);
       if (mounted) setState(() {});
@@ -131,7 +147,11 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           // songs — we only ever want this one video.
           params: const YoutubePlayerParams(showControls: true, strictRelatedVideos: true));
       _sub = _yt!.videoStateStream.listen((s) {
-        _pos.value = s.position.inMilliseconds / 1000.0;
+        final pos = s.position.inMilliseconds / 1000.0;
+        final playing = pos > _lastYtPos + 1e-3; // advanced since last tick => playing
+        _lastYtPos = pos;
+        _clock.anchor(pos, playing: playing);
+        _pos.value = _clock.estimate(DateTime.now());
       });
       setState(() {}); // swap the placeholder for the real player
     } catch (_) {
@@ -148,11 +168,17 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
       final r = await ref.read(songRepositoryProvider).get(widget.youtubeId);
       if (mounted) {
         setState(() => _r = r);
+        _syncClockDuration();
         _maybeInitFilePlayer();
       }
     } catch (_) {
       if (mounted) setState(() => _analysisFailed = true);
     }
+  }
+
+  void _syncClockDuration() {
+    final d = _r?.source.duration;
+    if (d != null) _clock.duration = d;
   }
 
   /// No analysis on server or on-device → build a placeholder, save it locally,
@@ -181,6 +207,7 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
           _analysisFailed = false;
           _generating = false;
         });
+        _syncClockDuration();
         _maybeInitFilePlayer();
       }
     } catch (e, st) {
@@ -208,6 +235,8 @@ class _PlayerScreenState extends ConsumerState<PlayerScreen> {
     _yt?.close();
     _audio?.dispose();
     _pos.dispose();
+    _ticker?.dispose();
+    _playingSub?.cancel();
     super.dispose();
   }
 
